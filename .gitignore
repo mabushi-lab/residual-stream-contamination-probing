@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+cache/
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.toc
+.venv/
+
+# Pile extracts are not redistributed. The uncopyrighted mirror carries mixed
+# upstream terms, so the items are rebuilt rather than shipped:
+#
+#     python3 src/build_itemsets.py --set pile --subdomain Wikipedia --n 500
+#     python3 src/build_itemsets.py --set pile --subdomain GitHub --n 500
+#
+# The revision is pinned in build_itemsets.py, so a rebuild reproduces the
+# hashes recorded in MANIFEST.sha256. The WikiMIA items are MIT licensed and
+# are committed, so the Phase 1 headline result verifies straight from a clone.
+experiments/data/pile_*.jsonl

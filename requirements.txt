@@ -1,0 +1,16 @@
+# Statistical core and figures. Versions are the ones the reported numbers
+# were produced with (Python 3.10.12).
+numpy==2.2.6
+scipy==1.15.3
+scikit-learn==1.7.2
+matplotlib==3.10.9
+
+# Test suite
+pytest==9.1.1
+
+# Only needed to audit a real model (Phases 1 and 3 to 5). The statistical
+# core, the test suite and every number in the paper run without these.
+# zstandard>=0.22        # reading the Pile's .jsonl.zst shards
+# torch>=2.2
+# transformers>=4.40
+# datasets>=2.19

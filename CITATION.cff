@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+message: "If you use this software or the RSCP protocol, please cite the paper."
+title: "RSCP: Residual-Stream Contamination Probing"
+abstract: >-
+  Reference implementation of the RSCP protocol, a level-matched placebo
+  baseline for detecting benchmark contamination from a model's residual
+  stream. Includes the statistical core, the Phase 0c validation study, two
+  generative simulators, the item-set builders, and the Phase 1 nuisance
+  audit of published membership-inference splits.
+type: software
+license: MIT
+authors:
+  - family-names: Braun
+    given-names: Florian
+    email: braunf25@proton.me
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+
+version: 1.0.0
+date-released: 2026-08-09
+
+# Fill these in once the repository and the Zenodo release exist.
+# repository-code: "https://github.com/USER/REPO"
+# url: "https://YOUR-WEBSITE"
+# doi: "10.5281/zenodo.XXXXXXX"
+
+keywords:
+  - benchmark contamination
+  - membership inference
+  - evaluation methodology
+  - linear probing
+  - language models
+
+# The paper is the preferred citation. Uncomment and fill in the arXiv ID
+# once the preprint is live.
+#
+# preferred-citation:
+#   type: article
+#   title: "Residual-Stream Contamination Probing"
+#   authors:
+#     - family-names: Braun
+#       given-names: Florian
+#   year: 2026
+#   journal: "arXiv preprint"
+#   url: "https://arxiv.org/abs/XXXX.XXXXX"

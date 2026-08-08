@@ -1,0 +1,22 @@
+RSCP audit
+==================================================================
+model            EleutherAI/pythia-410m
+protocol         level-matched recentred depth contrast, label-permutation null
+items            394 suspect / 788 reference  (2.0x)
+layers x dims    25 x 1024
+nuisance dims    5037
+
+BA_nuisance      0.8548   <- read first; REQUIREMENT E FAILS: sets are separable blind
+observed profile 0.472 0.532 0.517 0.525 0.555 0.561 0.595 0.599 0.596 0.594 0.598 0.613 0.608 0.612 0.632 0.623 0.628 0.643 0.660 0.662 0.669 0.667 0.679 0.679 0.679
+baseline profile 0.467 0.513 0.512 0.518 0.514 0.522 0.545 0.565 0.580 0.593 0.592 0.582 0.574 0.581 0.569 0.567 0.582 0.565 0.563 0.562 0.555 0.551 0.544 0.538 0.542
+                 span 12.6 accuracy points, hump, peak at layer 9
+BASELINE         matched at layer 0: 0.467 vs observed 0.472  (gap 0.005, n/side 394)
+
+depth contrast   T_raw=+0.06100  baseline=+0.01530  T_adj=+0.04570
+                 p=0.0005  (recentred=True)
+uncorrected      T=+0.06100  p=0.0005  (shown only to expose the baseline's effect)
+
+VERDICT
+  NO VERDICT. BA_nuisance = 0.855 exceeds 0.75: a classifier with no access to the model separates these two sets almost perfectly, so they are not exchangeable and Requirement E fails. This is the defining property of a temporal split, and it is why published membership-inference numbers on such splits are not interpretable. The contrast is reported above as a measurement, not as evidence of contamination. Pass --acknowledge-non-exchangeable to override, and say so in any writeup.
+
+ran in 217.7s

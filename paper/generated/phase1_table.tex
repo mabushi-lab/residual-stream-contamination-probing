@@ -1,0 +1,19 @@
+\begin{table*}[t]
+\small
+\centering
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}llrrrrrrl@{}}
+\toprule
+Model & Split & $n_S$ & $\BA_{\nuis}$ & baseline span & $T_{\mathrm{raw}}$ & baseline & $T_{\mathrm{adj}}$ & Outcome \\
+\midrule
+pythia-160m & pile github & 500 & 0.490 & 3.9 pts & -0.0099 & +0.0116 & -0.0215 & null, $p=1.00$ \\
+pythia-410m & pile github & 500 & 0.494 & 3.1 pts & -0.0067 & +0.0048 & -0.0114 & null, $p=0.96$ \\
+pythia-160m & pile wikipedia & 500 & 0.517 & 2.9 pts & -0.0040 & +0.0066 & -0.0106 & null, $p=0.94$ \\
+pythia-410m & pile wikipedia & 500 & 0.521 & 2.7 pts & -0.0048 & +0.0050 & -0.0098 & null, $p=0.94$ \\
+pythia-160m & wikimia & 394 & 0.856 & 29.1 pts & +0.0498 & +0.0138 & +0.0361 & no verdict, Req.\ E fails \\
+pythia-410m & wikimia & 394 & 0.855 & 12.6 pts & +0.0610 & +0.0153 & +0.0457 & no verdict, Req.\ E fails \\
+\bottomrule
+\end{tabular}
+\caption{Phase 1, measured. $\BA_{\nuis}$ is what a classifier with no access to the model achieves; near $0.5$ the two sets are exchangeable, near $0.86$ they are not and no contamination verdict is admissible. The baseline span is the range of the placebo depth profile, and it is the quantity the flat-profile assumption gets wrong. Every Pile arm is null with a negative adjusted statistic, which is what the literature predicts for a corpus seen approximately once.}
+\label{tab:phase1}
+\end{table*}

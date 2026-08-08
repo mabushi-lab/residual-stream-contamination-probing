@@ -1,0 +1,22 @@
+RSCP audit
+==================================================================
+model            EleutherAI/pythia-160m
+protocol         level-matched recentred depth contrast, label-permutation null
+items            500 suspect / 1000 reference  (2.0x)
+layers x dims    13 x 768
+nuisance dims    4781
+
+BA_nuisance      0.4904   <- read first; sets are well matched
+observed profile 0.514 0.508 0.505 0.520 0.499 0.501 0.503 0.508 0.499 0.496 0.485 0.484 0.489
+baseline profile 0.541 0.528 0.518 0.518 0.516 0.534 0.542 0.551 0.553 0.547 0.550 0.556 0.548
+                 span 3.9 accuracy points, hump, peak at layer 11
+BASELINE         matched at layer 0: 0.541 vs observed 0.514  (gap 0.027, n/side 500)
+
+depth contrast   T_raw=-0.00989  baseline=+0.01162  T_adj=-0.02150
+                 p=0.9980  (recentred=True)
+uncorrected      T=-0.00989  p=0.9200  (shown only to expose the baseline's effect)
+
+VERDICT
+  Contrast null (p=0.9980). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.
+
+ran in 220.5s
