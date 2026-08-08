@@ -7,6 +7,7 @@ paper/*.log
 paper/*.out
 paper/*.toc
 .venv/
+build/
 
 # Pile extracts are not redistributed. The uncopyrighted mirror carries mixed
 # upstream terms, so the items are rebuilt rather than shipped:

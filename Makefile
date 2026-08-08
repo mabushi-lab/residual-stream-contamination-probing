@@ -8,6 +8,7 @@
 #   make all         everything, in order
 #   make verify      tests, then check artefacts against MANIFEST.sha256
 #   make phase1      audit real models (needs torch + model weights)
+#   make arxiv       build/arxiv.tar.gz, ready to upload as TeX source
 #
 # Only `phase1` needs a GPU or model weights. Everything else runs on a laptop.
 # Run from this directory; scripts resolve paths through src/paths.py, so an
@@ -18,7 +19,7 @@ WORKERS ?= 4
 LATEX   ?= pdflatex -interaction=nonstopmode -halt-on-error
 
 .PHONY: all test validate validate-legacy figures paper manifest verify \
-        phase1 dryrun clean distclean tree
+        phase1 dryrun arxiv clean distclean tree
 
 all: test validate figures paper manifest
 
@@ -56,6 +57,9 @@ phase1:
 
 dryrun:
 	$(PY) src/run_rscp_eval.py --dry-run --out experiments/runs/dryrun
+
+arxiv:
+	$(PY) src/make_arxiv.py
 
 tree:
 	@find . -type d -not -path '*/.*' -not -path './cache/*' | sort
