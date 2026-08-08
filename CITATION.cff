@@ -32,7 +32,7 @@ identifiers:
     value: "10.5281/zenodo.21855510"
     description: "Version DOI, v1.0.0"
 
-# url: "https://YOUR-WEBSITE"
+url: "https://braunf.com/"
 
 keywords:
   - benchmark contamination

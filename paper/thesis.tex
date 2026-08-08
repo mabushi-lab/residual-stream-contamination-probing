@@ -74,12 +74,31 @@
 
 \title{\bf Excess Separability: Nuisance-Controlled Residual-Stream\\ Probing for Benchmark Contamination Detection}
 
-% Replace the author string and affiliation with your preferred form.
-\author{Florian Braun \\ \texttt{braunf25@proton.me}}
+\author{Florian Braun \\
+  \texttt{\href{mailto:braunf25@proton.me}{braunf25@proton.me}} \quad
+  \texttt{\href{https://braunf.com/}{braunf.com}}}
 \date{}
+
+% Unnumbered footnote for the artefact pointer. Using \thanks inside \title
+% would put \url in a moving argument, which is fragile; this does not.
+\newcommand\blfootnote[1]{%
+  \begingroup
+  \renewcommand\thefootnote{}\footnote{#1}%
+  \addtocounter{footnote}{-1}%
+  \endgroup}
 
 \begin{document}
 \maketitle
+
+\blfootnote{Code, item-set builders, the Phase 0c validation study and the
+artefact manifest are at
+\href{https://github.com/mabushi-lab/residual-stream-contamination-probing}%
+{github.com/mabushi-lab/residual-stream-contamination-probing}. The exact
+snapshot these results were produced from is archived at
+\href{https://doi.org/10.5281/zenodo.21855510}{doi:10.5281/zenodo.21855510}.
+Upstream dataset revisions are pinned, so the item sets rebuild to the hashes
+recorded in the manifest. The Pile extracts are rebuilt rather than
+redistributed; GSM1k is not redistributable at all.}
 
 \begin{abstract}
 \noindent
