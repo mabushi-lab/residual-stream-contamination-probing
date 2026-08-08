@@ -18,10 +18,21 @@ authors:
 version: 1.0.0
 date-released: 2026-08-09
 
-# Fill these in once the repository and the Zenodo release exist.
-# repository-code: "https://github.com/USER/REPO"
+repository-code: "https://github.com/mabushi-lab/residual-stream-contamination-probing"
+
+# Concept DOI. Always resolves to the most recent version, which is what a
+# "cite this repository" button should point at.
+doi: "10.5281/zenodo.21855509"
+
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.21855509"
+    description: "Concept DOI, all versions"
+  - type: doi
+    value: "10.5281/zenodo.21855510"
+    description: "Version DOI, v1.0.0"
+
 # url: "https://YOUR-WEBSITE"
-# doi: "10.5281/zenodo.XXXXXXX"
 
 keywords:
   - benchmark contamination
