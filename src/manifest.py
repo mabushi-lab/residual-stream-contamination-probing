@@ -22,10 +22,13 @@ TRACKED = [
     "paper/generated/results_tables.tex",
     "paper/generated/phase1_macros.tex",
     "paper/generated/phase1_table.tex",
+    "paper/generated/phase3_macros.tex",
+    "paper/generated/phase3_table.tex",
     "experiments/phase1_summary.json",
     "paper/thesis.pdf", "paper/abstract_of_thesis.pdf",
 ]
 TRACKED_GLOB2 = ("experiments/runs/phase1", (".json",))
+TRACKED_GLOB4 = ("experiments/runs/phase3", (".json",))
 TRACKED_GLOB = ("figures", (".pdf", ".png"))
 # The item sets are hashed too. This paper's claim is about how the reference
 # set is built, so an audit that cannot be tied to the exact items it ran on
@@ -43,7 +46,8 @@ REBUILD_CMD = (
 
 def _files():
     out = [f for f in TRACKED if os.path.exists(f)]
-    for d, exts in (TRACKED_GLOB, TRACKED_GLOB2, TRACKED_GLOB3):
+    for d, exts in (TRACKED_GLOB, TRACKED_GLOB2, TRACKED_GLOB3,
+                    TRACKED_GLOB4):
         if os.path.isdir(d):
             out += sorted(os.path.join(d, f) for f in os.listdir(d)
                           if f.endswith(exts))

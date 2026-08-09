@@ -40,6 +40,9 @@ figures:
 	@[ -n "$$(ls experiments/runs/phase1/*.json 2>/dev/null)" ] \
 	  && $(PY) render/render_phase1.py \
 	  || echo "  (no Phase 1 audits yet; skipping)"
+	@[ -n "$$(ls experiments/runs/phase3/*.json 2>/dev/null)" ] \
+	  && $(PY) render/render_phase3.py \
+	  || echo "  (no Phase 3 audits yet; skipping)"
 
 paper:
 	cd paper && $(LATEX) thesis.tex >/dev/null && $(LATEX) thesis.tex >/dev/null

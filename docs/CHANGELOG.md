@@ -19,6 +19,28 @@ decodability is flat in depth. With decodability rising it rejected 0.72 of
 true nulls; on a residual stream where noise accumulates the profile *declines*
 and the test lost all power.
 
+## Phase 3, the positive control
+
+Run against Oren et al.'s deliberately contaminated 1.4B checkpoint, PIQA
+injected at 50x. Two findings and one correction.
+
+The construction is E1, not E3 as first assumed. They inject a random subset
+of the public test file and ship the whole file, so the withheld arm comes
+back by difference and both arms are one pool split before training. All 1000
+injected items are present in the public pool, which the builder now verifies
+rather than assumes.
+
+The contrast is null under both prefix lengths: BA_nuisance 0.4955 with the
+question alone, 0.5174 with the full record, T_adj negative in both, p = 0.38
+and 0.77. Running it twice was necessary because a null on a ten-word prefix
+says more about the prefix than about the instrument.
+
+Two limitations surfaced. The placebo cannot match below chance, since a
+surface-key split always produces some separability, so the layer-0 match is
+censored from below when the observed profile dips under 0.5. And
+`layer_profile` retains a dense N x N smoother per layer per seed, which is
+17.6 GB at 49 layers and N = 3000; this is why the first run was killed.
+
 ## v3, level-matched placebo baseline (current)
 The placebo split already estimates the null depth profile, since both its
 halves are non-members. Recentring on it replaces a global assumption with a

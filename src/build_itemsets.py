@@ -311,7 +311,11 @@ CONTAM_DUP = {
 # what the difference construction needs. Adding another set means checking
 # both zips carry it, not just guessing a member name.
 CONTAM_SETS = {
-    "piqa": dict(q="goal", a="sol1", key="goal", pool="piqa/tests.jsonl",
+    # No `a`: both copies ship sol1 and sol2 with no label, so nothing here
+    # is a gold answer and the inflation estimate is not available for this
+    # arm. Calling sol1 the answer would be wrong on its own terms, and in
+    # the full-record modes it also sits inside the prefix.
+    "piqa": dict(q="goal", key="goal", pool="piqa/tests.jsonl",
                  fields=["goal", "sol1", "sol2"]),
 }
 
@@ -460,8 +464,10 @@ def build_contam(n, out, seed=0, allow_small=False, which="piqa", local=None,
             prefix = e.get("_raw", "")
         else:
             prefix = "\n".join(str(e[f]) for f in fields if f in e)
-        return {"prefix": prefix, "answer": str(e.get(spec["a"], "")),
-                "source": src}
+        # `answer` stays empty: see CONTAM_SETS. The probe never reads it,
+        # and the inflation estimate it feeds needs a correctness label these
+        # files do not have.
+        return {"prefix": prefix, "answer": "", "source": src}
 
     suspect = [fmt(e, f"{which}_injected") for e in inj if spec["q"] in e]
     if not suspect:
@@ -547,6 +553,8 @@ def build_contam(n, out, seed=0, allow_small=False, which="piqa", local=None,
         _guard(suspect, reference, f"contam/{which}")
     toks = sum(len(r["prefix"].split()) for r in suspect) / max(len(suspect), 1)
     print(f"  prefix mode {mode!r}, {toks:.0f} words per item on average")
+    print("  no correctness labels in these files, so the inflation estimate "
+          "is unavailable for this arm")
     print("  construction E1: both arms are the same pool, split at random "
           "before training. Exchangeability is exact.")
     write(f"{out}/contam_{which}_{mode}_suspect.jsonl", suspect)
