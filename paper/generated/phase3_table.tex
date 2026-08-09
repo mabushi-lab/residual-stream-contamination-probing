@@ -1,0 +1,15 @@
+\begin{table}[t]
+\small
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrl@{}}
+\toprule
+Prefix & words & $\BA_{\nuis}$ & baseline span & $T_{\mathrm{adj}}$ & Outcome \\
+\midrule
+full record & 44 & 0.517 & 2.6 pts & -0.0040 & null, $p=0.77$ \\
+question only & 10 & 0.496 & 3.0 pts & +0.0015 & null, $p=0.38$ \\
+\bottomrule
+\end{tabular}
+\caption{Phase 3, measured. Oren et al.'s deliberately contaminated 1.4B checkpoint, PIQA injected at $m=50$. Both arms are the same test file split at random before training, so Requirement E holds by construction and $\BA_{\nuis}$ confirms it. The two rows differ only in how much of each record the probe reads. Neither is significant, so the null is not an artefact of a short prefix.}
+\label{tab:phase3}
+\end{table}

@@ -957,11 +957,24 @@ Table~\ref{tab:we2published}, where every published method including an
 activation probe sits within a few points of chance at $m\in\{1,2\}$, out to a
 duplication count fifty times higher.
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.96\textwidth]{p3_profiles_paper.pdf}
+\caption{Phase 3, measured. Observed depth profile against the level-matched
+placebo baseline on \citeauthor{oren2024proving}'s contaminated 1.4B
+checkpoint, PIQA injected at $m=\PthreeDup{}$, under two prefix lengths. The
+baseline is not flat in either panel and changes shape with prefix length,
+which is why it has to be measured rather than assumed. Neither observed
+profile departs from it significantly.}
+\label{fig:phase3}
+\end{figure*}
+
 The baseline profile is again not flat, spanning \PthreeSpanLo{} to
-\PthreeSpanHi{} accuracy points, and its shape changes with prefix length:
-falling on the short prefix, humped with a peak at layer \PthreePeakFull{} on
-the full record. Surface separability's depth profile is a property of the
-inputs as well as the model, which is a further reason it cannot be assumed.
+\PthreeSpanHi{} accuracy points, and its shape changes with prefix length
+(Figure~\ref{fig:phase3}): falling on the short prefix, humped with a peak at
+layer \PthreePeakFull{} on the full record. Surface separability's depth
+profile is a property of the inputs as well as the model, which is a further
+reason it cannot be assumed.
 
 \subsection{What this does not show}
 
