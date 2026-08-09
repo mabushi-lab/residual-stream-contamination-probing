@@ -15,13 +15,15 @@
 # Individual steps are allowed to fail. A missing dataset should cost you that
 # arm, not the run.
 set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
 
 MODELS="${MODELS:-EleutherAI/pythia-160m EleutherAI/pythia-410m}"
 REF_MODEL="${REF_MODEL:-EleutherAI/pythia-70m}"
 N="${N:-500}"
 MAXLEN="${MAXLEN:-512}"
 BATCH="${BATCH:-8}"
-OUT="${OUT:-runs/phase1}"
+OUT="${OUT:-experiments/runs/phase1}"
+DATA="${DATA:-experiments/data}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 hr() { printf '%s\n' "------------------------------------------------------------"; }
@@ -65,17 +67,17 @@ print("  preflight ok")
 PY
 
 hr; echo "1. plumbing check (no model needed)"
-python3 run_rscp_eval.py --dry-run --out "$OUT/_dryrun" >/dev/null && echo "  ok" \
+python3 src/run_rscp_eval.py --dry-run --out "$OUT/_dryrun" >/dev/null && echo "  ok" \
   || { echo "  dry run FAILED; stopping"; exit 1; }
 
 if [ "$SKIP_BUILD" = "0" ]; then
   hr; echo "2. build item sets"
-  python3 build_itemsets.py --set wikimia --n "$N"                        || echo "  (wikimia arm unavailable)"
-  python3 build_itemsets.py --set pile --subdomain "Wikipedia (en)" --n "$N" || echo "  (pile/wikipedia arm unavailable)"
-  python3 build_itemsets.py --set pile --subdomain "Github" --n "$N"      || echo "  (pile/github arm unavailable)"
-  python3 build_itemsets.py --set gsm8k_gsm1k --n "$N"                    || echo "  (GSM arm unavailable; GSM1k is access-controlled)"
+  python3 src/build_itemsets.py --set wikimia --n "$N" --out "$DATA"                        || echo "  (wikimia arm unavailable)"
+  python3 src/build_itemsets.py --set pile --subdomain "Wikipedia (en)" --n "$N" --out "$DATA" || echo "  (pile/wikipedia arm unavailable)"
+  python3 src/build_itemsets.py --set pile --subdomain "Github" --n "$N" --out "$DATA"      || echo "  (pile/github arm unavailable)"
+  python3 src/build_itemsets.py --set gsm8k_gsm1k --n "$N" --out "$DATA"                    || echo "  (GSM arm unavailable; GSM1k is access-controlled)"
 else
-  hr; echo "2. reusing data/"
+  hr; echo "2. reusing $DATA"
 fi
 
 hr; echo "3. audit"
@@ -84,11 +86,11 @@ for m in $MODELS; do
   tag="$(echo "$m" | tr '/' '_')"
   for pair in "wikimia:wikimia" "pile_wikipedia:pile_wikipedia" \
               "pile_github:pile_github" "gsm8k:gsm1k"; do
-    sus="data/${pair%%:*}_suspect.jsonl"
-    ref="data/${pair##*:}_reference.jsonl"
+    sus="$DATA/${pair%%:*}_suspect.jsonl"
+    ref="$DATA/${pair##*:}_reference.jsonl"
     [ -f "$sus" ] && [ -f "$ref" ] || continue
     echo "-- $m  ${pair%%:*}"
-    if python3 run_rscp_eval.py --model "$m" --reference-model "$REF_MODEL" \
+    if python3 src/run_rscp_eval.py --model "$m" --reference-model "$REF_MODEL" \
          --suspect "$sus" --reference "$ref" --max-length "$MAXLEN" \
          --batch-size "$BATCH" --out "$OUT/${tag}__${pair%%:*}"; then
       ran=$((ran+1))
@@ -101,8 +103,8 @@ done
 hr
 if [ "$ran" -eq 0 ]; then
   echo "no audits completed. If every arm was skipped, no item sets were built:"
-  echo "  python3 build_itemsets.py --list"
+  echo "  python3 src/build_itemsets.py --list"
   exit 1
 fi
 echo "4. collect ($ran audits)"
-python3 collect_phase1.py --dir "$OUT"
+python3 src/collect_phase1.py --dir "$OUT"

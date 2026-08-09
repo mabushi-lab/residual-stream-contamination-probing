@@ -269,25 +269,80 @@ def build_gsm(n, out, seed=0, allow_small=False):
     write(f"{out}/gsm1k_reference.jsonl", reference)
 
 
-def build_contam(n, out, seed=0, allow_small=False):
+# Oren et al.'s injected files, fetched from their release repository.
+CONTAM_REPO = ("https://raw.githubusercontent.com/tatsu-lab/"
+               "test_set_contamination/main/detection_challenge_benchmarks")
+
+# Which HF split supplies the reference items. The injected file is a whole
+# test/validation set, so the reference has to come from the same benchmark's
+# training split: same annotation pipeline, same format, not injected.
+#
+# This is construction E3, not E1. Oren et al. inject entire test sets rather
+# than a random half of a pool, so no exactly-exchangeable withheld arm exists
+# in their release. Membership ground truth is still exact, which is the point
+# of using these checkpoints; exchangeability is approximate and BA_nuisance
+# measures it rather than assuming it. Benchmarks whose training split cannot
+# supply 2|S| items are excluded, which rules out the MMLU subsets despite
+# their being the most heavily duplicated.
+CONTAM_SETS = {
+    "piqa": dict(file="piqa.jsonl", hf=("ybisk/piqa", None, "train"),
+                 dup=50, q="goal", a="sol1"),
+    "mnli": dict(file="mnli.jsonl", hf=("nyu-mll/glue", "mnli", "train"),
+                 dup=10, q="premise", a="hypothesis"),
+}
+
+
+def build_contam(n, out, seed=0, allow_small=False, which="piqa"):
+    """Suspect = Oren et al.'s injected items. Reference = same benchmark, untouched."""
     _need_datasets()
+    import json as _json
+    import urllib.request
     from datasets import load_dataset
+    if which not in CONTAM_SETS:
+        raise SystemExit(f"--contam-set must be one of {sorted(CONTAM_SETS)}")
+    spec = CONTAM_SETS[which]
     rng = random.Random(seed)
-    ds = load_dataset("pubmed_qa", "pqa_labeled", split="train")
-    rows = [{"prefix": f"Question: {e['question']}\nAnswer:",
-             "answer": e.get("final_decision", ""), "source": "pubmedqa"}
-            for e in ds]
-    rng.shuffle(rows)
-    k = min(n, len(rows) // 3)
-    suspect, reference = rows[:k], rows[k: 3 * k]
+
+    url = f"{CONTAM_REPO}/{spec['file']}"
+    print(f"  fetching injected items: {url}")
+    try:
+        raw = urllib.request.urlopen(url, timeout=60).read().decode()
+    except Exception as e:
+        raise SystemExit(
+            f"could not fetch {url}\n  {e}\n\n"
+            "These are the files Oren et al. injected during training, and the "
+            "audit is meaningless without exactly them. Do not substitute the "
+            "public test set: it is shuffled relative to the injected copy. "
+            "Clone github.com/tatsu-lab/test_set_contamination and point "
+            "CONTAM_REPO at the local path if the raw URL has moved.")
+    inj = [_json.loads(l) for l in raw.splitlines() if l.strip()]
+    print(f"  {len(inj)} injected items, duplication {spec['dup']}x")
+
+    def fmt(e, src):
+        q, a = spec["q"], spec["a"]
+        return {"prefix": f"{e[q]}", "answer": str(e.get(a, "")), "source": src}
+
+    suspect = [fmt(e, f"{which}_injected") for e in inj if spec["q"] in e]
+    if not suspect:
+        raise SystemExit(
+            f"injected file has no '{spec['q']}' field. Keys seen: "
+            f"{sorted(inj[0])[:8]}. Fix CONTAM_SETS[{which!r}] rather than "
+            "guessing, a mismatched field silently builds a nonsense prefix.")
+
+    path, cfg, split = spec["hf"]
+    ds = load_dataset(path, cfg, split=split) if cfg else load_dataset(path, split=split)
+    reference = [fmt(e, f"{which}_heldout") for e in ds]
+    rng.shuffle(suspect); rng.shuffle(reference)
+
+    k = min(n, len(suspect), len(reference) // 2)
+    suspect, reference = suspect[:k], reference[: 2 * k]
     _check(suspect, reference)
     if not allow_small:
-        _guard(suspect, reference, "contam")
-    print("  NOTE: the injected/withheld split of the Oren et al. checkpoints "
-          "is fixed by their release. Substitute their split here; this "
-          "random split is a placeholder that will measure nothing.")
-    write(f"{out}/contam_suspect.jsonl", suspect)
-    write(f"{out}/contam_reference.jsonl", reference)
+        _guard(suspect, reference, f"contam/{which}")
+    print(f"  NOTE: construction E3, not E1. Membership is exact; "
+          f"exchangeability is approximate. Read BA_nuisance before the verdict.")
+    write(f"{out}/contam_{which}_suspect.jsonl", suspect)
+    write(f"{out}/contam_{which}_reference.jsonl", reference)
 
 
 def build_wikimia(n, out, seed=0, lengths=(32, 64, 128, 256),
@@ -337,6 +392,9 @@ def main():
                     help="suspect items; twice as many reference items")
     ap.add_argument("--out", default=s(DATA))
     ap.add_argument("--subdomain", default="Wikipedia (en)")
+    ap.add_argument("--contam-set", default="piqa",
+                    choices=sorted(CONTAM_SETS),
+                    help="which injected benchmark to audit (--set contam)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--allow-small", action="store_true",
@@ -351,6 +409,9 @@ def main():
     if a.set == "pile":
         build_pile(a.n, a.out, a.subdomain, seed=a.seed,
                    allow_small=a.allow_small)
+    elif a.set == "contam":
+        build_contam(a.n, a.out, seed=a.seed, allow_small=a.allow_small,
+                     which=a.contam_set)
     else:
         BUILDERS[a.set](a.n, a.out, seed=a.seed, allow_small=a.allow_small)
 

@@ -8,6 +8,7 @@
 #   make all         everything, in order
 #   make verify      tests, then check artefacts against MANIFEST.sha256
 #   make phase1      audit real models (needs torch + model weights)
+#   make phase3      positive control on Oren et al.'s contaminated checkpoints
 #   make arxiv       build/arxiv.tar.gz, ready to upload as TeX source
 #
 # Only `phase1` needs a GPU or model weights. Everything else runs on a laptop.
@@ -19,7 +20,7 @@ WORKERS ?= 4
 LATEX   ?= pdflatex -interaction=nonstopmode -halt-on-error
 
 .PHONY: all test validate validate-legacy figures paper manifest verify \
-        phase1 dryrun arxiv clean distclean tree
+        phase1 phase3 dryrun arxiv clean distclean tree
 
 all: test validate figures paper manifest
 
@@ -54,6 +55,9 @@ verify: test
 
 phase1:
 	bash experiments/run_phase1.sh
+
+phase3:
+	bash experiments/run_phase3.sh
 
 dryrun:
 	$(PY) src/run_rscp_eval.py --dry-run --out experiments/runs/dryrun
