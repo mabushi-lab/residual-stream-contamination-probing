@@ -9,6 +9,9 @@ paper/*.toc
 .venv/
 build/
 
+# Oren et al.'s release, cloned for Phase 3. Not ours to vendor.
+test_set_contamination/
+
 # Pile extracts are not redistributed. The uncopyrighted mirror carries mixed
 # upstream terms, so the items are rebuilt rather than shipped:
 #

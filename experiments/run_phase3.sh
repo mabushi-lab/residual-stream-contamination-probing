@@ -31,9 +31,18 @@ cd "$(dirname "$0")/.." || exit 1
 # dupcount-higher carries piqa at 50x and mnli at 10x. If the protocol has any
 # sensitivity at all, 50x duplication in a 1.4B model is where it shows.
 MODEL="${MODEL:-yonatano/Contam-1.4b-dupcount-higher}"
+VARIANT="${VARIANT:-contam-1.4b-dupcount-higher}"
+CONTAM_DIR="${CONTAM_DIR:-test_set_contamination/detection_challenge_benchmarks}"
 REF_MODEL="${REF_MODEL:-gpt2}"
-SETS="${SETS:-piqa mnli}"
-N="${N:-500}"
+SETS="${SETS:-piqa}"
+# How much of each record the probe reads. The first Phase 3 run used 'goal',
+# about 15 tokens, and returned null; that is too short to attribute the null
+# to the instrument rather than to the prefix. 'full' is the whole record,
+# which is what the model was trained on.
+PREFIX="${PREFIX:-full}"
+# 1000 injected items and 2084 withheld, so n=1000 uses the whole injected
+# arm and still satisfies |R| = 2|S| exactly. No reason to leave power unused.
+N="${N:-1000}"
 MAXLEN="${MAXLEN:-512}"
 BATCH="${BATCH:-4}"
 OUT="${OUT:-experiments/runs/phase3}"
@@ -60,6 +69,25 @@ except ImportError as e:
            if "huggingface" in str(e) else "  fix: pip install -U transformers")
     sys.exit(f"  installed but will not import:\n\n    {e}\n\n{fix}")
 print(f"  torch {torch.__version__}, transformers {transformers.__version__}")
+
+# The 1.4B checkpoint is 5.8 GB in fp32 and the reference model adds ~0.5 GB.
+# Without this check the download dies partway and transformers reports it as
+# a missing model, which sends you looking in the wrong place entirely.
+import os, shutil
+cache = os.environ.get("HF_HUB_CACHE") or os.path.join(
+    os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface")), "hub")
+os.makedirs(cache, exist_ok=True)
+free = shutil.disk_usage(cache).free / 1e9
+print(f"  model cache: {cache}  ({free:.1f} GB free)")
+if free < 8.0:
+    sys.exit(
+        f"  only {free:.1f} GB free, and this run needs about 8.\n\n"
+        "  Point the cache at a volume with room, ideally the same one this\n"
+        "  repository is on:\n\n"
+        "      export HF_HUB_CACHE=\"$(pwd)/cache/hf\"\n"
+        "      make phase3\n\n"
+        "  A failed download also leaves a partial blob behind. Remove it:\n"
+        f"      rm -rf {cache}/models--yonatano--*")
 print("  preflight ok")
 PY
 
@@ -69,8 +97,17 @@ python3 src/run_rscp_eval.py --dry-run --out "$OUT/_dryrun" >/dev/null \
 
 if [ "$SKIP_BUILD" = "0" ]; then
   hr; echo "2. build item sets"
+  # Their injected sets ship as one zip per trained variant. Cloning is more
+  # reliable than the raw URL and costs 25 MB once.
+  if [ ! -d "$CONTAM_DIR" ]; then
+    echo "  cloning Oren et al.'s release"
+    git clone --depth 1 https://github.com/tatsu-lab/test_set_contamination \
+      >/dev/null 2>&1 || echo "  (clone failed; will try the raw URL)"
+  fi
   for s in $SETS; do
     python3 src/build_itemsets.py --set contam --contam-set "$s" \
+      --contam-model "$VARIANT" --contam-prefix "$PREFIX" \
+      ${CONTAM_DIR:+--contam-dir "$CONTAM_DIR"} \
       --n "$N" --out "$DATA" || echo "  ($s arm unavailable)"
   done
 else
@@ -81,13 +118,13 @@ hr; echo "3. audit  ($MODEL)"
 tag="$(echo "$MODEL" | tr '/' '_')"
 ran=0
 for s in $SETS; do
-  sus="$DATA/contam_${s}_suspect.jsonl"
-  ref="$DATA/contam_${s}_reference.jsonl"
+  sus="$DATA/contam_${s}_${PREFIX}_suspect.jsonl"
+  ref="$DATA/contam_${s}_${PREFIX}_reference.jsonl"
   [ -f "$sus" ] && [ -f "$ref" ] || { echo "  (skipping $s, no item sets)"; continue; }
-  echo "-- $s"
+  echo "-- $s  (prefix=$PREFIX)"
   if python3 src/run_rscp_eval.py --model "$MODEL" --reference-model "$REF_MODEL" \
        --suspect "$sus" --reference "$ref" --max-length "$MAXLEN" \
-       --batch-size "$BATCH" --out "$OUT/${tag}__contam_${s}"; then
+       --batch-size "$BATCH" --out "$OUT/${tag}__contam_${s}_${PREFIX}"; then
     ran=$((ran+1))
   else
     echo "  FAILED: $s"

@@ -14,3 +14,5 @@ pytest==9.1.1
 # torch>=2.2
 # transformers>=4.40
 # datasets>=2.19
+# certifi>=2024.2        # CA bundle; python.org builds ship none on macOS,
+#                        # so the Phase 3 builder cannot fetch over https

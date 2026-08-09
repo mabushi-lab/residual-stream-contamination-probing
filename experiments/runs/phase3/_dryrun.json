@@ -1,0 +1,94 @@
+{
+  "model": "(dry run)",
+  "dry_run": true,
+  "protocol": "level-matched recentred depth contrast, label-permutation null",
+  "n_suspect": 300,
+  "n_reference": 600,
+  "reference_multiplier": 2.0,
+  "n_layers": 13,
+  "d": 96,
+  "nuisance_dims": 292,
+  "pooling": "last",
+  "alpha": 0.05,
+  "config": {
+    "n_folds": 5,
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "n_permutations": 1000,
+    "ridge_lambdas": [
+      0.01,
+      0.1,
+      1.0,
+      10.0,
+      100.0,
+      1000.0
+    ],
+    "standardise": true,
+    "skip_layer_zero": true,
+    "rng_seed": 0,
+    "conditional_permutation": false,
+    "n_strata": 10,
+    "n_bootstrap": 2000,
+    "studentise": true,
+    "target_df": 32.0,
+    "also_run_permutation": false
+  },
+  "ba_by_layer": [
+    0.4980000000000001,
+    0.5075000000000001,
+    0.49850000000000005,
+    0.5585,
+    0.5009999999999999,
+    0.4915,
+    0.4980000000000001,
+    0.527,
+    0.475,
+    0.508,
+    0.5045,
+    0.46699999999999997,
+    0.48849999999999993
+  ],
+  "ba_nuisance": 0.48450000000000004,
+  "exchangeability": "ok",
+  "baseline_profile": [
+    0.49733333333333335,
+    0.514,
+    0.4926666666666667,
+    0.5186666666666666,
+    0.45533333333333337,
+    0.47533333333333333,
+    0.48133333333333334,
+    0.5006666666666666,
+    0.49666666666666665,
+    0.48333333333333334,
+    0.4793333333333334,
+    0.5513333333333332,
+    0.5226666666666667
+  ],
+  "placebo": {
+    "status": "ok",
+    "ba0": 0.49733333333333335,
+    "target_ba0": 0.4980000000000001,
+    "match_gap": 0.0006666666666667598,
+    "n_per_side": 300
+  },
+  "contrast": {
+    "T_adj": -0.016448412698412754,
+    "T_raw": -0.009607142857142925,
+    "baseline": 0.006841269841269829,
+    "p_value": 0.9965017491254373,
+    "recentred": true
+  },
+  "contrast_uncorrected": {
+    "T": -0.009607142857142925,
+    "p_value": 0.9395302348825587
+  },
+  "verdict": "Contrast null (p=0.9965). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.",
+  "warnings": [],
+  "wallclock_s": 5.880841970443726
+}

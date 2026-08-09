@@ -269,9 +269,26 @@ def build_gsm(n, out, seed=0, allow_small=False):
     write(f"{out}/gsm1k_reference.jsonl", reference)
 
 
-# Oren et al.'s injected files, fetched from their release repository.
+# Oren et al.'s injected files. Their release ships one zip per trained model
+# under detection_challenge_benchmarks/<variant>/benchmarks.zip, not loose
+# JSONL, and only two variants carry archives: the small/medium/large models
+# share contam-1.4b's injected sets, and dupcount-lower shares
+# dupcount-higher's.
 CONTAM_REPO = ("https://raw.githubusercontent.com/tatsu-lab/"
                "test_set_contamination/main/detection_challenge_benchmarks")
+# The full public benchmark files, which are the population the injected
+# subsets were drawn from. The withheld arm is their difference.
+POOL_REPO = ("https://raw.githubusercontent.com/tatsu-lab/"
+             "test_set_contamination/main/benchmarks")
+
+# Duplication counts, transcribed from their README. These are the reason to
+# prefer one variant over another: 50x gives the protocol its best chance of
+# firing, 1x is the hardest case and the one their own Table 4 shows every
+# published method failing at.
+CONTAM_DUP = {
+    "contam-1.4b": {"piqa": 1},
+    "contam-1.4b-dupcount-higher": {"piqa": 50},
+}
 
 # Which HF split supplies the reference items. The injected file is a whole
 # test/validation set, so the reference has to come from the same benchmark's
@@ -284,65 +301,256 @@ CONTAM_REPO = ("https://raw.githubusercontent.com/tatsu-lab/"
 # measures it rather than assuming it. Benchmarks whose training split cannot
 # supply 2|S| items are excluded, which rules out the MMLU subsets despite
 # their being the most heavily duplicated.
+# q/a are the prefix and answer fields; `pool` is the member of the public
+# benchmarks.zip holding the full population the injected file was drawn from;
+# `key` is what identifies an item across the two copies.
+#
+# Only piqa is listed. The public release covers eight benchmarks and the
+# injected release covers twelve, and piqa is the one where a heavily
+# duplicated injected file (50x) and its full pool are both present, which is
+# what the difference construction needs. Adding another set means checking
+# both zips carry it, not just guessing a member name.
 CONTAM_SETS = {
-    "piqa": dict(file="piqa.jsonl", hf=("ybisk/piqa", None, "train"),
-                 dup=50, q="goal", a="sol1"),
-    "mnli": dict(file="mnli.jsonl", hf=("nyu-mll/glue", "mnli", "train"),
-                 dup=10, q="premise", a="hypothesis"),
+    "piqa": dict(q="goal", a="sol1", key="goal", pool="piqa/tests.jsonl",
+                 fields=["goal", "sol1", "sol2"]),
 }
 
+# How much of each record the probe reads.
+#   goal  the question only, about 15 tokens. What the first Phase 3 run used.
+#   full  goal and both solutions, joined by newlines. Closest to what the
+#         model was trained on while keeping both arms formatted identically.
+#   raw   the verbatim JSONL line.
+#
+# `raw` is the most faithful reproduction if injection was verbatim, but the
+# injected file and the public pool are separate files and may not serialise
+# identically. Any difference in key order or spacing would be a first-order
+# surface cue, and the probe would learn file formatting rather than
+# familiarity. BA_nuisance is exactly the instrument that catches this, so the
+# mode is available, but read that number before anything else.
+CONTAM_PREFIX_MODES = ("full", "goal", "raw")
 
-def build_contam(n, out, seed=0, allow_small=False, which="piqa"):
-    """Suspect = Oren et al.'s injected items. Reference = same benchmark, untouched."""
-    _need_datasets()
-    import json as _json
+
+def _zip_member(zf, which):
+    """Find the archive member holding `which`, or explain what is there."""
+    names = [n for n in zf.namelist() if not n.endswith("/")]
+    for n in names:
+        if os.path.basename(n).lower().split(".")[0] == which.lower():
+            return n
+    hits = [n for n in names if which.lower() in n.lower()]
+    if len(hits) == 1:
+        return hits[0]
+    raise SystemExit(
+        f"no member for {which!r} in the archive. Members:\n  "
+        + "\n  ".join(sorted(names)[:40])
+        + f"\n\nPick one and add it to CONTAM_SETS[{which!r}]. Do not guess "
+          "from the name alone: the audit is only meaningful against the "
+          "exact file that was injected.")
+
+
+def _fetch_bytes(url):
+    """Read a URL as bytes, using certifi's CA bundle."""
+    import ssl
     import urllib.request
-    from datasets import load_dataset
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ctx = ssl.create_default_context()
+    return urllib.request.urlopen(url, timeout=120, context=ctx).read()
+
+
+def _fetch_text(url):
+    """Read a URL, using certifi's CA bundle.
+
+    Python installed from python.org ships no CA bundle and does not read the
+    macOS keychain, so urllib fails with CERTIFICATE_VERIFY_FAILED on any https
+    URL until either `Install Certificates.command` is run or a bundle is
+    supplied. certifi is already present as a transitive dependency of
+    `datasets`. Verification stays on: this file selects which items an audit
+    calls contaminated, so an unauthenticated fetch is not an acceptable
+    shortcut.
+    """
+    import ssl
+    import urllib.request
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ctx = ssl.create_default_context()
+    return urllib.request.urlopen(url, timeout=60, context=ctx).read().decode()
+
+
+def build_contam(n, out, seed=0, allow_small=False, which="piqa", local=None,
+                 variant="contam-1.4b-dupcount-higher", mode="full"):
+    """Suspect = Oren et al.'s injected items. Reference = same benchmark, untouched."""
+    # No `datasets` dependency: both arms come out of Oren et al.'s own zips.
+    import io
+    import json as _json
+    import zipfile
     if which not in CONTAM_SETS:
         raise SystemExit(f"--contam-set must be one of {sorted(CONTAM_SETS)}")
+    if variant not in CONTAM_DUP:
+        raise SystemExit(f"--contam-model must be one of {sorted(CONTAM_DUP)}")
     spec = CONTAM_SETS[which]
+    dup = CONTAM_DUP[variant].get(which)
     rng = random.Random(seed)
 
-    url = f"{CONTAM_REPO}/{spec['file']}"
-    print(f"  fetching injected items: {url}")
-    try:
-        raw = urllib.request.urlopen(url, timeout=60).read().decode()
-    except Exception as e:
-        raise SystemExit(
-            f"could not fetch {url}\n  {e}\n\n"
-            "These are the files Oren et al. injected during training, and the "
-            "audit is meaningless without exactly them. Do not substitute the "
-            "public test set: it is shuffled relative to the injected copy. "
-            "Clone github.com/tatsu-lab/test_set_contamination and point "
-            "CONTAM_REPO at the local path if the raw URL has moved.")
-    inj = [_json.loads(l) for l in raw.splitlines() if l.strip()]
-    print(f"  {len(inj)} injected items, duplication {spec['dup']}x")
+    rel = f"{variant}/benchmarks.zip"
+    local = local or os.environ.get("CONTAM_DIR")
+    if local:
+        p = os.path.join(os.path.expanduser(local), rel)
+        print(f"  reading {p}")
+        if not os.path.exists(p):
+            raise SystemExit(
+                f"{p} does not exist. --contam-dir should be the "
+                "detection_challenge_benchmarks directory of a clone of "
+                "github.com/tatsu-lab/test_set_contamination, which contains "
+                f"one subdirectory per model. Expected {rel} inside it.")
+        blob = open(p, "rb").read()
+    else:
+        url = f"{CONTAM_REPO}/{rel}"
+        print(f"  fetching {url}")
+        try:
+            blob = _fetch_bytes(url)
+        except Exception as e:
+            hint = ""
+            if "CERTIFICATE_VERIFY_FAILED" in str(e):
+                hint = ("\n  This is the macOS no-CA-bundle problem:\n"
+                        "    pip install certifi\n")
+            raise SystemExit(
+                f"could not fetch {url}\n  {e}\n{hint}\n"
+                "Cloning is more robust anyway:\n"
+                "    git clone https://github.com/tatsu-lab/test_set_contamination\n"
+                "    python3 src/build_itemsets.py --set contam "
+                f"--contam-set {which} --n {n} \\\n"
+                "        --contam-dir test_set_contamination/detection_challenge_benchmarks")
+
+    zf = zipfile.ZipFile(io.BytesIO(blob))
+    member = spec.get("member") or _zip_member(zf, which)
+    raw = zf.read(member).decode("utf-8", "replace")
+    print(f"  {member}, duplication {dup}x in {variant}")
+
+    inj = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = _json.loads(line)
+        except _json.JSONDecodeError:
+            rec = {"text": line}             # some members are plain .txt
+        rec["_raw"] = line
+        inj.append(rec)
+    print(f"  {len(inj)} injected items")
+
+    # What the probe reads. The model was trained on the whole record, so a
+    # prefix of the goal alone asks whether ~15 tokens of a memorised item
+    # carry a familiarity direction, which is a much harder question than the
+    # one Phase 3 is meant to answer. `full` reconstructs the record.
+    #
+    # PIQA ships no label, so there is no correct answer to leak and the
+    # prefix rule is not in tension here. That is specific to this benchmark:
+    # do not copy this to a set where `answer` is the thing being predicted.
+    fields = spec.get("fields", [spec["q"]])
 
     def fmt(e, src):
-        q, a = spec["q"], spec["a"]
-        return {"prefix": f"{e[q]}", "answer": str(e.get(a, "")), "source": src}
+        if mode == "goal":
+            prefix = str(e[spec["q"]])
+        elif mode == "raw":
+            prefix = e.get("_raw", "")
+        else:
+            prefix = "\n".join(str(e[f]) for f in fields if f in e)
+        return {"prefix": prefix, "answer": str(e.get(spec["a"], "")),
+                "source": src}
 
     suspect = [fmt(e, f"{which}_injected") for e in inj if spec["q"] in e]
     if not suspect:
+        sample = _json.dumps(inj[0])[:400] if inj else "(empty)"
         raise SystemExit(
-            f"injected file has no '{spec['q']}' field. Keys seen: "
-            f"{sorted(inj[0])[:8]}. Fix CONTAM_SETS[{which!r}] rather than "
-            "guessing, a mismatched field silently builds a nonsense prefix.")
+            f"no '{spec['q']}' field in {member}.\n"
+            f"  keys: {sorted(inj[0]) if inj else []}\n"
+            f"  first record: {sample}\n\n"
+            f"Set the right q/a fields in CONTAM_SETS[{which!r}]. Do not "
+            "guess: a mismatched field builds a nonsense prefix and the "
+            "statistics will look perfectly healthy.")
 
-    path, cfg, split = spec["hf"]
-    ds = load_dataset(path, cfg, split=split) if cfg else load_dataset(path, split=split)
-    reference = [fmt(e, f"{which}_heldout") for e in ds]
+    # The reference arm is the rest of the same pool. Oren et al. injected a
+    # subset of a public benchmark file and shipped the whole file separately,
+    # so the withheld items are recoverable by difference. Both arms then come
+    # from one pool split before training, which is construction E1: the split
+    # is randomised, so exchangeability holds by construction rather than by
+    # argument. This is the only arm in the paper where that is true.
+    if local:
+        # --contam-dir is <clone>/detection_challenge_benchmarks; the pool
+        # lives in the sibling <clone>/benchmarks.
+        clone = os.path.dirname(os.path.abspath(os.path.expanduser(local)))
+        pool_zip = os.path.join(clone, "benchmarks", "benchmarks.zip")
+        print(f"  reading {pool_zip}")
+        if not os.path.exists(pool_zip):
+            raise SystemExit(
+                f"{pool_zip} does not exist.\n\n"
+                "The withheld arm is recovered by subtracting the injected "
+                "items from the full public benchmark file, so both zips are "
+                "needed. Point --contam-dir at "
+                "<clone>/detection_challenge_benchmarks and keep the clone "
+                "intact rather than copying one directory out of it.")
+        pool_blob = open(pool_zip, "rb").read()
+    else:
+        print(f"  fetching {POOL_REPO}/benchmarks.zip")
+        pool_blob = _fetch_bytes(f"{POOL_REPO}/benchmarks.zip")
+    pz = zipfile.ZipFile(io.BytesIO(pool_blob))
+    pool_member = spec.get("pool") or _zip_member(pz, which)
+    pool = []
+    for l in pz.read(pool_member).decode("utf-8", "replace").splitlines():
+        if not l.strip():
+            continue
+        rec = _json.loads(l)
+        rec["_raw"] = l
+        pool.append(rec)
+    print(f"  pool: {pool_member}, {len(pool)} items")
+
+    key = spec.get("key", spec["q"])
+    pool_keys = {str(e[key]) for e in pool if key in e}
+    inj_keys = {str(e[key]) for e in inj if key in e}
+
+    # Two different quantities, and conflating them hides the failure that
+    # would matter. `found` is how many injected items exist in the public
+    # pool, and it is the E1 claim: below 100% the two arms are not one
+    # population. `dropped` is how many pool rows were excluded, and it
+    # legitimately exceeds len(inj) because PIQA repeats `goal` across items
+    # with different solution pairs. Excluding all of them is the conservative
+    # direction: it costs a few reference items and guarantees no injected
+    # text survives in the withheld arm.
+    found = sum(1 for e in inj if key in e and str(e[key]) in pool_keys)
+    reference = [fmt(e, f"{which}_withheld") for e in pool
+                 if key in e and str(e[key]) not in inj_keys]
+    dropped = len(pool) - len(reference)
+    print(f"  injected items present in the pool: {found}/{len(inj)}"
+          f"  ({len(inj_keys)} distinct keys)")
+    print(f"  pool rows excluded: {dropped}, withheld: {len(reference)}")
+    if found < 0.98 * len(inj):
+        raise SystemExit(
+            f"only {found} of {len(inj)} injected items are in the public "
+            f"pool, matching on {key!r}.\n\n"
+            "The withheld arm is defined as the pool minus the injected "
+            "items, so this construction is only E1 if the injected file is "
+            "a subset of the pool. It is not. The audit would compare two "
+            "populations rather than two halves of one, which is the exact "
+            "confound this protocol exists to remove. Check whether the "
+            "injected copy was reformatted before injection.")
+
     rng.shuffle(suspect); rng.shuffle(reference)
-
     k = min(n, len(suspect), len(reference) // 2)
     suspect, reference = suspect[:k], reference[: 2 * k]
     _check(suspect, reference)
     if not allow_small:
         _guard(suspect, reference, f"contam/{which}")
-    print(f"  NOTE: construction E3, not E1. Membership is exact; "
-          f"exchangeability is approximate. Read BA_nuisance before the verdict.")
-    write(f"{out}/contam_{which}_suspect.jsonl", suspect)
-    write(f"{out}/contam_{which}_reference.jsonl", reference)
+    toks = sum(len(r["prefix"].split()) for r in suspect) / max(len(suspect), 1)
+    print(f"  prefix mode {mode!r}, {toks:.0f} words per item on average")
+    print("  construction E1: both arms are the same pool, split at random "
+          "before training. Exchangeability is exact.")
+    write(f"{out}/contam_{which}_{mode}_suspect.jsonl", suspect)
+    write(f"{out}/contam_{which}_{mode}_reference.jsonl", reference)
 
 
 def build_wikimia(n, out, seed=0, lengths=(32, 64, 128, 256),
@@ -395,6 +603,17 @@ def main():
     ap.add_argument("--contam-set", default="piqa",
                     choices=sorted(CONTAM_SETS),
                     help="which injected benchmark to audit (--set contam)")
+    ap.add_argument("--contam-dir", default=None,
+                    help="local detection_challenge_benchmarks/ directory, "
+                         "instead of fetching over https")
+    ap.add_argument("--contam-model", default="contam-1.4b-dupcount-higher",
+                    choices=sorted(CONTAM_DUP),
+                    help="which trained variant's injected sets to use; "
+                         "dupcount-higher duplicates piqa 50x")
+    ap.add_argument("--contam-prefix", default="full",
+                    choices=CONTAM_PREFIX_MODES,
+                    help="how much of each record the probe reads; "
+                         "'full' is the whole record, 'goal' the question only")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--allow-small", action="store_true",
@@ -411,7 +630,8 @@ def main():
                    allow_small=a.allow_small)
     elif a.set == "contam":
         build_contam(a.n, a.out, seed=a.seed, allow_small=a.allow_small,
-                     which=a.contam_set)
+                     which=a.contam_set, local=a.contam_dir,
+                     variant=a.contam_model, mode=a.contam_prefix)
     else:
         BUILDERS[a.set](a.n, a.out, seed=a.seed, allow_small=a.allow_small)
 
