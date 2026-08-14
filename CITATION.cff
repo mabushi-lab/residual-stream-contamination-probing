@@ -14,7 +14,7 @@ authors:
   - family-names: Braun
     given-names: Florian
     email: braunf25@proton.me
-    # orcid: "https://orcid.org/0000-0000-0000-0000"
+    orcid: "https://orcid.org/0009-0003-5285-9327"
 
 version: 1.0.1
 date-released: 2026-08-14
@@ -54,6 +54,7 @@ preferred-citation:
     - family-names: Braun
       given-names: Florian
       email: braunf25@proton.me
+      orcid: "https://orcid.org/0009-0003-5285-9327"
   year: 2026
   journal: "arXiv preprint arXiv:2608.12652"
   doi: "10.48550/arXiv.2608.12652"

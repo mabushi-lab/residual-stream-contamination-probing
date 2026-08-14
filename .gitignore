@@ -22,3 +22,4 @@ test_set_contamination/
 # hashes recorded in MANIFEST.sha256. The WikiMIA items are MIT licensed and
 # are committed, so the Phase 1 headline result verifies straight from a clone.
 experiments/data/pile_*.jsonl
+.DS_Store
