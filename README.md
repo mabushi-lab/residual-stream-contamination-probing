@@ -1,9 +1,14 @@
 # Residual-Stream Contamination Probing
 
+[![arXiv](https://img.shields.io/badge/arXiv-2608.12652-b31b1b.svg)](https://arxiv.org/abs/2608.12652)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21855509.svg)](https://doi.org/10.5281/zenodo.21855509)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Detecting benchmark contamination by probing a language model's internal
 activations, with the controls that make the result mean something.
 
-**Paper:** `paper/thesis.pdf` (21 pp) · **Extended abstract:**
+**Paper:** [arXiv:2608.12652](https://arxiv.org/abs/2608.12652), also built
+from source as `paper/thesis.pdf` (22 pp) · **Extended abstract:**
 `paper/abstract_of_thesis.pdf` (2 pp) · **Where things live:**
 `PROJECT_STRUCTURE.md` · **How to run:** `docs/RUNNING.md`
 

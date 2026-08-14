@@ -6,7 +6,8 @@ abstract: >-
   baseline for detecting benchmark contamination from a model's residual
   stream. Includes the statistical core, the Phase 0c validation study, two
   generative simulators, the item-set builders, and the Phase 1 nuisance
-  audit of published membership-inference splits.
+  audit of published membership-inference splits, and the Phase 3 positive
+  control on deliberately contaminated checkpoints.
 type: software
 license: MIT
 authors:
@@ -15,8 +16,8 @@ authors:
     email: braunf25@proton.me
     # orcid: "https://orcid.org/0000-0000-0000-0000"
 
-version: 1.0.0
-date-released: 2026-08-09
+version: 1.0.1
+date-released: 2026-08-14
 
 repository-code: "https://github.com/mabushi-lab/residual-stream-contamination-probing"
 
@@ -31,6 +32,9 @@ identifiers:
   - type: doi
     value: "10.5281/zenodo.21855510"
     description: "Version DOI, v1.0.0"
+  - type: other
+    value: "arXiv:2608.12652"
+    description: "Preprint describing the protocol"
 
 url: "https://braunf.com/"
 
@@ -41,15 +45,16 @@ keywords:
   - linear probing
   - language models
 
-# The paper is the preferred citation. Uncomment and fill in the arXiv ID
-# once the preprint is live.
-#
-# preferred-citation:
-#   type: article
-#   title: "Residual-Stream Contamination Probing"
-#   authors:
-#     - family-names: Braun
-#       given-names: Florian
-#   year: 2026
-#   journal: "arXiv preprint"
-#   url: "https://arxiv.org/abs/XXXX.XXXXX"
+# Cite the paper, not the software. GitHub's "Cite this repository" button and
+# most reference managers honour this block over the fields above.
+preferred-citation:
+  type: article
+  title: "Excess Separability: Nuisance-Controlled Residual-Stream Probing for Benchmark Contamination Detection"
+  authors:
+    - family-names: Braun
+      given-names: Florian
+      email: braunf25@proton.me
+  year: 2026
+  journal: "arXiv preprint arXiv:2608.12652"
+  doi: "10.48550/arXiv.2608.12652"
+  url: "https://arxiv.org/abs/2608.12652"

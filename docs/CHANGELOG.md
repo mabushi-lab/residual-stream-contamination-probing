@@ -19,6 +19,15 @@ decodability is flat in depth. With decodability rising it rejected 0.72 of
 true nulls; on a residual stream where noise accumulates the profile *declines*
 and the test lost all power.
 
+## v1.0.1
+
+Preprint live at arXiv:2608.12652. Adds Phase 3, the positive control, and
+its renderer; pins upstream dataset revisions in the item-set builders; tracks
+the item sets in the manifest, taking it from 62 artefacts to 80; adds
+`make arxiv` to assemble a submission tarball with the graphics path rewritten
+and a verification compile; and fixes the pre-reorganisation paths that had
+left `make phase1` broken.
+
 ## Phase 3, the positive control
 
 Run against Oren et al.'s deliberately contaminated 1.4B checkpoint, PIQA
