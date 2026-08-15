@@ -1,0 +1,22 @@
+RSCP audit
+==================================================================
+model            yonatano/Contam-1.4b-dupcount-lower
+protocol         level-matched recentred depth contrast, label-permutation null
+items            1000 suspect / 2000 reference  (2.0x)
+layers x dims    49 x 1536
+nuisance dims    5549
+
+BA_nuisance      0.5140   <- read first; sets are well matched
+observed profile 0.512 0.505 0.507 0.496 0.495 0.495 0.497 0.496 0.496 0.496 0.499 0.501 0.503 0.504 0.506 0.506 0.502 0.501 0.502 0.501 0.503 0.503 0.500 0.503 0.508 0.507 0.504 0.506 0.511 0.511 0.510 0.511 0.508 0.510 0.514 0.513 0.516 0.515 0.515 0.514 0.512 0.513 0.512 0.512 0.512 0.510 0.508 0.509 0.507
+baseline profile 0.507 0.522 0.517 0.512 0.510 0.505 0.502 0.507 0.506 0.510 0.506 0.507 0.506 0.498 0.500 0.503 0.502 0.503 0.501 0.500 0.499 0.500 0.500 0.500 0.497 0.500 0.496 0.502 0.491 0.491 0.495 0.496 0.497 0.496 0.496 0.496 0.498 0.499 0.499 0.497 0.497 0.499 0.494 0.494 0.491 0.496 0.496 0.496 0.497
+                 span 3.1 accuracy points, hump, peak at layer 1
+BASELINE         matched at layer 0: 0.507 vs observed 0.512  (gap 0.005, n/side 1000)
+
+depth contrast   T_raw=+0.00507  baseline=-0.00572  T_adj=+0.01079
+                 p=0.0075  (recentred=True)
+uncorrected      T=+0.00507  p=0.1194  (shown only to expose the baseline's effect)
+
+VERDICT
+  Contrast significant (p=0.0075) after recentring on the model's own null depth profile. Evidence of depth-dependent familiarity beyond surface separability. Report an exposure interval only if a same-family calibration exists.
+
+ran in 3000.0s

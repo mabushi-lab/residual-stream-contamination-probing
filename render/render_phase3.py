@@ -45,7 +45,7 @@ plt.rcParams.update({
 })
 
 # Duplication counts, from Oren et al.'s README.
-DUP = {"contam-1.4b-dupcount-higher": 50, "contam-1.4b": 1}
+DUP = {"contam-1.4b-dupcount-higher": 50, "contam-1.4b-dupcount-lower": 7}
 # Prefix modes, longest first so the table reads in order of information.
 MODE_ORDER = {"full": 0, "raw": 1, "goal": 2}
 MODE_LABEL = {"full": "full record", "goal": "question only",
@@ -93,14 +93,22 @@ def load(d):
             blocked=bool(o.get("verdict_blocked", False))))
     seen = {}
     for r in rows:
-        if r["mode"] in seen:
+        if r["dup"] is None:
             raise SystemExit(
-                f"two audits claim prefix mode {r['mode']!r} in {d}. Each mode "
-                "is one row of the table and one macro set, so a duplicate "
-                "would silently report one arm twice. Remove the superseded "
-                "run rather than letting the renderer pick.")
-        seen[r["mode"]] = r
-    rows.sort(key=lambda r: MODE_ORDER.get(r["mode"], 9))
+                f"{r['model']} has no known duplication count. Add it to DUP, "
+                "or remove the run: a Phase 3 row without an exposure is not "
+                "interpretable.")
+        k = (r["model"], r["mode"])
+        if k in seen:
+            raise SystemExit(
+                f"two audits claim {k} in {d}. One model and prefix mode is "
+                "one row of the table and one macro set, so a duplicate would "
+                "silently report one arm twice. Remove the superseded run "
+                "rather than letting the renderer pick.")
+        seen[k] = r
+    # Highest exposure first, then longest prefix: the strongest evidence for
+    # the protocol firing comes first, so a null there means most.
+    rows.sort(key=lambda r: (-r["dup"], MODE_ORDER.get(r["mode"], 9)))
     return rows
 
 
@@ -148,13 +156,13 @@ def mean_words(mode):
 def table(rows):
     L = [r"\begin{table}[t]", r"\small", r"\centering",
          r"\setlength{\tabcolsep}{4pt}",
-         r"\begin{tabular}{@{}lrrrrl@{}}", r"\toprule",
-         r"Prefix & words & $\BA_{\nuis}$ & baseline span & "
+         r"\begin{tabular}{@{}rlrrrrl@{}}", r"\toprule",
+         r"$m$ & Prefix & words & $\BA_{\nuis}$ & baseline span & "
          r"$T_{\mathrm{adj}}$ & Outcome \\", r"\midrule"]
     for r in rows:
         mw = mean_words(r["mode"])
         L.append(
-            f"{MODE_LABEL[r['mode']]} & {mw:.0f} & "
+            f"{r['dup']} & {MODE_LABEL[r['mode']]} & {mw:.0f} & "
             f"{r['ba_nuis']:.3f} & {r['span']:.1f} pts & {r['T_adj']:+.4f} & "
             f"null, $p={r['p']:.3f}$ \\\\")
     L += [r"\bottomrule", r"\end{tabular}",
@@ -182,9 +190,15 @@ def main():
     figures(rows)
     table(rows)
 
+    # Rows are sorted highest exposure first, so this is the full-record arm
+    # at the largest duplication count: the case where the protocol has the
+    # best chance of firing, and therefore the one a null says most about.
     full = next((r for r in rows if r["mode"] == "full"), rows[0])
     mac("PthreeN", float(len(rows)), ".0f")
+    mac("PthreeModels", float(len({r["model"] for r in rows})), ".0f")
     mac("PthreeDup", float(full["dup"] or 0), ".0f")
+    mac("PthreeDupLo", float(min(r["dup"] for r in rows)), ".0f")
+    mac("PthreeDupHi", float(max(r["dup"] for r in rows)), ".0f")
     mac("PthreeNsuspect", float(full["n_suspect"]), ".0f")
     mac("PthreeLayers", float(full["n_layers"]), ".0f")
     mac("PthreeNuisLo", min(r["ba_nuis"] for r in rows))

@@ -218,6 +218,38 @@ def audit(args):
     plc = level_matched_placebo(layers, ref_idx, key, float(ba[0]), cfg)
     prof = plc.get("profile")
 
+    # How stable is the baseline itself? The null permutes labels in the
+    # observed comparison and treats `base` as known, but `base` comes from a
+    # random split of the reference set at a searched noise level. If its
+    # spread is comparable to T_adj, the p-value understates the uncertainty.
+    placebo_spread = None
+    if args.placebo_reps > 1:
+        import dataclasses
+        import time as _time
+        w_ = profile_weights(len(layers))
+        bases = []
+        print(f"  placebo stability: {args.placebo_reps} re-estimates, each "
+              f"rebuilding the full {len(layers)}-layer profile")
+        t0 = _time.time()
+        for r in range(args.placebo_reps):
+            cfg_r = dataclasses.replace(cfg, rng_seed=cfg.rng_seed + 1000 * (r + 1))
+            p_r = level_matched_placebo(layers, ref_idx, key, float(ba[0]), cfg_r)
+            if p_r.get("profile") is not None:
+                bases.append(float(w_ @ np.asarray(p_r["profile"], float)))
+                el = _time.time() - t0
+                print(f"    rep {r + 1}/{args.placebo_reps}: "
+                      f"base={bases[-1]:+.5f}  ({el:.0f}s elapsed, "
+                      f"~{el / (r + 1) * (args.placebo_reps - r - 1):.0f}s left)",
+                      flush=True)
+        if len(bases) > 1:
+            b = np.asarray(bases)
+            placebo_spread = {"reps": len(bases), "mean": float(b.mean()),
+                              "sd": float(b.std(ddof=1)),
+                              "min": float(b.min()), "max": float(b.max())}
+            print(f"  placebo baseline over {len(bases)} split seeds: "
+                  f"mean {b.mean():+.5f}, sd {b.std(ddof=1):.5f}, "
+                  f"range [{b.min():+.5f}, {b.max():+.5f}]")
+
     # The placebo enters the observed statistic, never the null, so one null
     # serves both. The previous code recomputed the whole permutation batch to
     # produce the uncorrected comparison.
@@ -248,6 +280,7 @@ def audit(args):
         "ba_by_layer": [float(v) for v in ba], "ba_nuisance": ba_nuis,
         "exchangeability": exch,
         "baseline_profile": None if prof is None else [float(v) for v in prof],
+        "placebo_spread": placebo_spread,
         "placebo": {"status": plc.get("status"),
                     "ba0": plc.get("ba0"), "target_ba0": plc.get("target_ba0"),
                     "match_gap": plc.get("match_gap"),
@@ -419,6 +452,12 @@ def main():
                     help="truncate prefixes to this many tokens")
     ap.add_argument("--no-cache", action="store_true",
                     help="do not reuse cached activations")
+    ap.add_argument("--placebo-reps", type=int, default=1,
+                    help="re-estimate the placebo baseline this many times "
+                         "with different split seeds and report the spread. "
+                         "The permutation null treats the baseline as a known "
+                         "constant, so if this spread is comparable to T_adj "
+                         "the reported p-value is understated.")
     ap.add_argument("--placebo-min", type=int, default=50,
                     help="minimum reference items per placebo side")
     a = ap.parse_args()

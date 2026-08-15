@@ -105,6 +105,12 @@ if [ "$SKIP_BUILD" = "0" ]; then
       >/dev/null 2>&1 || echo "  (clone failed; will try the raw URL)"
   fi
   for s in $SETS; do
+    # Remove first. The builder refuses when a source cannot support the
+    # construction, and without this the audit below would silently proceed on
+    # whatever a previous run left behind: different items, possibly a
+    # different model, and a reference arm that is not withheld at all.
+    rm -f "$DATA/contam_${s}_${PREFIX}_suspect.jsonl" \
+          "$DATA/contam_${s}_${PREFIX}_reference.jsonl"
     python3 src/build_itemsets.py --set contam --contam-set "$s" \
       --contam-model "$VARIANT" --contam-prefix "$PREFIX" \
       ${CONTAM_DIR:+--contam-dir "$CONTAM_DIR"} \

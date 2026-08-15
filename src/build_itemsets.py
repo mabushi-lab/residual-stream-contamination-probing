@@ -286,8 +286,30 @@ POOL_REPO = ("https://raw.githubusercontent.com/tatsu-lab/"
 # firing, 1x is the hardest case and the one their own Table 4 shows every
 # published method failing at.
 CONTAM_DUP = {
-    "contam-1.4b": {"piqa": 1},
     "contam-1.4b-dupcount-higher": {"piqa": 50},
+    "contam-1.4b-dupcount-lower": {"piqa": 7},
+}
+
+# Which archive holds a variant's injected files. dupcount-lower ships none of
+# its own: per Oren et al.'s README it was trained on the same injected sets as
+# dupcount-higher, at lower duplication counts. That pairing is what makes a
+# dose-response comparison possible, since the item sets are identical and only
+# the exposure differs.
+CONTAM_ZIP = {
+    "contam-1.4b-dupcount-higher": "contam-1.4b-dupcount-higher",
+    "contam-1.4b-dupcount-lower": "contam-1.4b-dupcount-higher",
+}
+
+# Variants that inject whole benchmark files rather than subsets. Nothing is
+# withheld, so no complement exists and the E1 construction is unavailable.
+# Listed so the refusal explains itself instead of arriving as an argparse
+# error about an unrecognised name.
+CONTAM_WHOLE_FILE = {
+    "contam-1.4b": "injects the entire 3084-item PIQA test file at 1x, so "
+                   "nothing is withheld",
+    "Contam-Small": "shares contam-1.4b's whole-file injected sets",
+    "Contam-Medium": "shares contam-1.4b's whole-file injected sets",
+    "Contam-Large": "shares contam-1.4b's whole-file injected sets",
 }
 
 # Which HF split supplies the reference items. The injected file is a whole
@@ -393,13 +415,23 @@ def build_contam(n, out, seed=0, allow_small=False, which="piqa", local=None,
     import zipfile
     if which not in CONTAM_SETS:
         raise SystemExit(f"--contam-set must be one of {sorted(CONTAM_SETS)}")
+    if variant in CONTAM_WHOLE_FILE:
+        raise SystemExit(
+            f"{variant} {CONTAM_WHOLE_FILE[variant]}.\n\n"
+            "The withheld arm is the public pool minus the injected items, so "
+            "a variant that injects the whole file leaves an empty complement "
+            "and there is nothing to audit. Only the dupcount pair injects "
+            f"subsets: {sorted(CONTAM_DUP)}.\n\n"
+            "This is a property of the release, not a bug. Do not substitute "
+            "items from another variant: for this model they were injected "
+            "too, and the audit would compare members against members.")
     if variant not in CONTAM_DUP:
         raise SystemExit(f"--contam-model must be one of {sorted(CONTAM_DUP)}")
     spec = CONTAM_SETS[which]
     dup = CONTAM_DUP[variant].get(which)
     rng = random.Random(seed)
 
-    rel = f"{variant}/benchmarks.zip"
+    rel = f"{CONTAM_ZIP[variant]}/benchmarks.zip"
     local = local or os.environ.get("CONTAM_DIR")
     if local:
         p = os.path.join(os.path.expanduser(local), rel)
@@ -615,7 +647,7 @@ def main():
                     help="local detection_challenge_benchmarks/ directory, "
                          "instead of fetching over https")
     ap.add_argument("--contam-model", default="contam-1.4b-dupcount-higher",
-                    choices=sorted(CONTAM_DUP),
+                    choices=sorted(set(CONTAM_DUP) | set(CONTAM_WHOLE_FILE)),
                     help="which trained variant's injected sets to use; "
                          "dupcount-higher duplicates piqa 50x")
     ap.add_argument("--contam-prefix", default="full",

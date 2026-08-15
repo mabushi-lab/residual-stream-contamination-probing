@@ -101,6 +101,52 @@ def one_rep(sim, seed, eps, slope, key_noise, matched, n=N_PER):
             "ba_nuis": float(ba_n[0]), "ba0_gap": plc.get("match_gap")}
 
 
+def placebo_spread_rep(sim, seed, L_, reps=8, n=N_PER):
+    """Spread of the placebo baseline contrast across split seeds, at depth L_.
+
+    The permutation null treats the baseline as a known constant, and C2
+    measured a nominal false positive rate with the placebo re-estimated
+    inside every replicate, so at these settings the treatment is adequate.
+    On the real 49-layer model it is not: the baseline's standard deviation
+    across split seeds was 0.0057, half the size of the statistic it corrects,
+    and a significant result there survived only because the search happened
+    to land on a low draw.
+
+    This isolates depth as the candidate explanation. Everything else is held
+    at the Phase 0c defaults, and only the number of layers moves. If the
+    spread grows with depth, the mechanism is that the zero-sum contrast
+    distributes weight over more layers and the placebo profile has
+    correspondingly more room to wander.
+    """
+    import dataclasses
+    layers, _, y, meta = SIMULATORS[sim](n, 0.0, seed, n_ref_extra=n, d=D, L=L_)
+    w = profile_weights(L_ + 1)
+    key = placebo_key(meta, noise=0.5, seed=seed)
+    S, R = np.flatnonzero(y == 1), np.flatnonzero(y == 0)
+    o = np.argsort(key[R])
+    Ra, Rb = R[o[:n]], R[o[n:]]
+    idx = np.concatenate([S, Ra])
+    yo = np.concatenate([np.ones(n, int), np.zeros(n, int)])
+    ba, _ = layer_profile(layers, idx, yo, CFG, keep_smoothers=False)
+    pool = np.concatenate([Ra, Rb])
+
+    bases = []
+    for r in range(reps):
+        cfg_r = dataclasses.replace(CFG, rng_seed=CFG.rng_seed + 1000 * (r + 1))
+        p_r = level_matched_placebo(layers, pool, key, float(ba[0]), cfg_r)
+        if p_r.get("profile") is not None:
+            bases.append(float(w @ np.asarray(p_r["profile"], float)))
+    b = np.asarray(bases)
+    return {"L": L_, "seed": seed, "n_draws": len(b),
+            "sd": float(b.std(ddof=1)) if len(b) > 1 else float("nan"),
+            "mean": float(b.mean()) if len(b) else float("nan"),
+            "range": float(b.max() - b.min()) if len(b) > 1 else float("nan")}
+
+
+def _depth_job(a):
+    return placebo_spread_rep(*a)
+
+
 def _job(a):
     return one_rep(*a)
 
@@ -167,7 +213,7 @@ def main():
                   + [f"power{s}_{c}" for s in "AB" for c in range(3)]
                   + [f"prof{s}" for s in "AB"]
                   + [f"key{s}{int(v*10)}" for s in "B" for v in (0.5, 2.0, 5.0)]
-                  + ["timing"])
+                  + ["depth", "timing"])
         t = time.time()
         for i, sub in enumerate(stages, 1):
             print(f"[{i}/{len(stages)}] {sub}", flush=True)
@@ -205,6 +251,29 @@ def main():
         for k, v in out.items():
             print("   Sim-" + k + " " + " ".join(f"{a}={b:.3f}"
                                                  for a, b in v.items()))
+
+    elif st == "depth":
+        # Does the placebo baseline become unstable as the model gets deeper?
+        depths = (12, 24, 36, 49)
+        n_sim = a.R or 4
+        jobs = [("B", 7000 + s, Ld) for Ld in depths for s in range(n_sim)]
+        with ProcessPoolExecutor(max_workers=W_) as ex:
+            out = list(ex.map(_depth_job, jobs))
+        rec = []
+        for Ld in depths:
+            g = [o for o in out if o["L"] == Ld]
+            rec.append({"L": Ld, "n_sims": len(g),
+                        "mean_sd": float(np.mean([o["sd"] for o in g])),
+                        "max_sd": float(np.max([o["sd"] for o in g])),
+                        "mean_range": float(np.mean([o["range"] for o in g]))})
+            print(f"   L={Ld:>3}: sd(base) mean={rec[-1]['mean_sd']:.5f} "
+                  f"max={rec[-1]['max_sd']:.5f} "
+                  f"range={rec[-1]['mean_range']:.5f}")
+        res["placebo_depth"] = rec
+        ratio = rec[-1]["mean_sd"] / max(rec[0]["mean_sd"], 1e-12)
+        print(f"   sd at L={depths[-1]} is {ratio:.1f}x that at L={depths[0]}")
+        print("   real 49-layer model measured sd(base) = 0.00566 "
+              "against T_adj = 0.01079")
 
     elif st.startswith("cap"):
         sim, p = st[3], int(st[4:])

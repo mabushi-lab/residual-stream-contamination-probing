@@ -1,0 +1,22 @@
+RSCP audit
+==================================================================
+model            yonatano/Contam-1.4b-dupcount-lower
+protocol         level-matched recentred depth contrast, label-permutation null
+items            1000 suspect / 2000 reference  (2.0x)
+layers x dims    49 x 1536
+nuisance dims    5549
+
+BA_nuisance      0.5087   <- read first; sets are well matched
+observed profile 0.513 0.497 0.506 0.510 0.506 0.508 0.506 0.507 0.509 0.509 0.508 0.510 0.509 0.509 0.510 0.508 0.506 0.511 0.509 0.510 0.510 0.507 0.508 0.508 0.508 0.510 0.506 0.505 0.502 0.503 0.504 0.504 0.504 0.505 0.506 0.505 0.507 0.508 0.508 0.507 0.508 0.508 0.511 0.508 0.506 0.508 0.510 0.506 0.509
+baseline profile 0.499 0.518 0.512 0.504 0.510 0.507 0.503 0.496 0.493 0.490 0.491 0.498 0.495 0.496 0.501 0.499 0.502 0.511 0.512 0.513 0.513 0.512 0.511 0.512 0.509 0.513 0.515 0.516 0.516 0.514 0.518 0.517 0.518 0.517 0.513 0.513 0.516 0.516 0.515 0.514 0.514 0.510 0.511 0.513 0.510 0.509 0.510 0.507 0.506
+                 span 2.8 accuracy points, hump, peak at layer 32
+BASELINE         matched at layer 0: 0.499 vs observed 0.513  (gap 0.014, n/side 1000)
+
+depth contrast   T_raw=-0.00012  baseline=+0.00451  T_adj=-0.00463
+                 p=0.9085  (recentred=True)
+uncorrected      T=-0.00012  p=0.5222  (shown only to expose the baseline's effect)
+
+VERDICT
+  Contrast null (p=0.9085). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.
+
+ran in 1078.1s

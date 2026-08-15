@@ -90,5 +90,5 @@
   },
   "verdict": "Contrast null (p=0.9965). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.",
   "warnings": [],
-  "wallclock_s": 3.567189931869507
+  "wallclock_s": 5.012176990509033
 }
