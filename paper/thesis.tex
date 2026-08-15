@@ -1019,6 +1019,21 @@ Every number in \S\ref{sec:phase0} is written into this document by a
 generated macro file rather than transcribed, so the paper cannot drift from
 the run that produced it. The released artefacts are:
 
+\paragraph{What the protocol costs.} Worth stating, because it bounds what can
+be audited. Cross-fitting produces a dense $N\times N$ smoother per layer per
+fold seed, so the memory is $O(\text{seeds}\cdot N^{2})$ if the layers are
+streamed and $O(\text{layers}\cdot\text{seeds}\cdot N^{2})$ if they are
+retained. At the \PthreeLayers{} layers and $N=3000$ of \S\ref{sec:phase3},
+with five seeds, that is $0.36$\,GB against $17.6$\,GB. The released
+implementation streams: the permutation null consumes each layer's smoothers
+once, so accumulating the weighted contribution and releasing them costs
+nothing and is what makes deep models tractable at all. Compute scales as
+$O(\text{layers}\cdot\text{seeds}\cdot N^{2}d)$ for the fits and
+$O(\text{layers}\cdot\text{seeds}\cdot N^{2}B)$ for the null; with activations
+cached, the statistical stage for \PthreeLayers{} layers at $N=3000$ takes
+about seven minutes on an M-series laptop. The dominant cost of an audit is
+the forward passes, not the statistics.
+
 \begin{itemize}\itemsep1pt
 \item \texttt{rscp.py}, the protocol, which imports and runs on numpy alone;
       torch is needed only to extract activations from a real model.

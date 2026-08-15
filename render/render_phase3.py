@@ -189,8 +189,10 @@ def main():
     mac("PthreeLayers", float(full["n_layers"]), ".0f")
     mac("PthreeNuisLo", min(r["ba_nuis"] for r in rows))
     mac("PthreeNuisHi", max(r["ba_nuis"] for r in rows))
-    mac("PthreePLo", min(r["p"] for r in rows), ".2f")
-    mac("PthreePHi", max(r["p"] for r in rows), ".2f")
+    # Three decimals, matching the table. Two roundings of the same number in
+    # one section reads as carelessness.
+    mac("PthreePLo", min(r["p"] for r in rows), ".3f")
+    mac("PthreePHi", max(r["p"] for r in rows), ".3f")
     mac("PthreeTadjFull", full["T_adj"], ".4f")
     mac("PthreePFull", full["p"], ".2f")
     mac("PthreeGapFull", full["gap"], ".3f")

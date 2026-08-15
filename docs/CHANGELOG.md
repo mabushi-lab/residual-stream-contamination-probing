@@ -19,6 +19,36 @@ decodability is flat in depth. With decodability rising it rejected 0.72 of
 true nulls; on a residual stream where noise accumulates the profile *declines*
 and the test lost all power.
 
+## v1.1.0
+
+Streaming smoothers, and Phase 3 re-run at full sample size.
+
+`layer_profile` retained a dense N x N smoother per layer per seed, which is
+17.6 GB at 49 layers and N = 3000 and capped Phase 3 at half the available
+items. The permutation null consumes those smoothers one layer at a time
+anyway, so `streaming_profile_and_null` accumulates the weighted contribution
+and releases each layer immediately: 0.36 GB at the same settings.
+`layer_profile` also takes `keep_smoothers=False`, which the placebo now uses.
+A test asserts the streaming and retained paths give the same profile, null
+and p-value, and the Phase 3 audit reproduced to every reported digit before
+the sample size changed. The statistical stage also roughly halved, because
+the uncorrected comparison no longer recomputes the entire permutation batch.
+
+Phase 3 now runs at n = 1000, the whole injected arm, against 2000 withheld.
+Both prefix arms are null: T_adj +0.0049 at p = 0.081 on the question-only
+prefix, +0.0035 at p = 0.210 on the full record. The layer-0 match improves to
+0.001 on the full-record arm.
+
+Two corrections came out of matching the sample sizes. The claim that the
+baseline profile changes shape with prefix length did not survive: at n = 500
+the short prefix looked falling and the full record humped, but at matched
+n = 1000 both peak in the first few layers. What scales with prefix length is
+the span, 1.4 against 3.0 accuracy points. And the placebo limitation is
+broader than first recorded: it cannot match below chance, but it also
+undershot an observed 0.515 by reaching only 0.497, so the general statement
+is that the surface key bounds the attainable range in both directions. That
+is now L11 in the paper.
+
 ## v1.0.1
 
 Preprint live at arXiv:2608.12652. Adds Phase 3, the positive control, and
