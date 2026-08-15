@@ -68,8 +68,15 @@ def load(d):
         stem = os.path.basename(f)[:-5]
         model = stem.split("__")[0].replace("yonatano_", "")
         tail = stem.split("__")[-1]
-        mode = tail.rsplit("_", 1)[-1] if tail.rsplit("_", 1)[-1] in MODE_LABEL \
-            else "goal"
+        mode = tail.rsplit("_", 1)[-1]
+        if mode not in MODE_LABEL:
+            # Runs from before the prefix mode was part of the filename. Their
+            # mode is unrecoverable, and guessing produces two rows claiming to
+            # be the same arm, which collides on macro names and fails the
+            # LaTeX build. Skip loudly instead.
+            print(f"  skipping {os.path.basename(f)}: no prefix mode in the "
+                  f"filename, so which arm it is cannot be determined")
+            continue
         pl = o.get("placebo", {})
         base = np.asarray(o["baseline_profile"], dtype=float)
         rows.append(dict(
@@ -84,6 +91,15 @@ def load(d):
             T_adj=o["contrast"]["T_adj"], p=o["contrast"]["p_value"],
             p_raw=o["contrast_uncorrected"]["p_value"],
             blocked=bool(o.get("verdict_blocked", False))))
+    seen = {}
+    for r in rows:
+        if r["mode"] in seen:
+            raise SystemExit(
+                f"two audits claim prefix mode {r['mode']!r} in {d}. Each mode "
+                "is one row of the table and one macro set, so a duplicate "
+                "would silently report one arm twice. Remove the superseded "
+                "run rather than letting the renderer pick.")
+        seen[r["mode"]] = r
     rows.sort(key=lambda r: MODE_ORDER.get(r["mode"], 9))
     return rows
 
