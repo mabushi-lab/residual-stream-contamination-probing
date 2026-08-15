@@ -101,7 +101,7 @@ def one_rep(sim, seed, eps, slope, key_noise, matched, n=N_PER):
             "ba_nuis": float(ba_n[0]), "ba0_gap": plc.get("match_gap")}
 
 
-def placebo_spread_rep(sim, seed, L_, reps=8, n=N_PER):
+def placebo_spread_rep(sim, seed, L_, key_noise=0.5, reps=8, n=N_PER):
     """Spread of the placebo baseline contrast across split seeds, at depth L_.
 
     The permutation null treats the baseline as a known constant, and C2
@@ -121,7 +121,7 @@ def placebo_spread_rep(sim, seed, L_, reps=8, n=N_PER):
     import dataclasses
     layers, _, y, meta = SIMULATORS[sim](n, 0.0, seed, n_ref_extra=n, d=D, L=L_)
     w = profile_weights(L_ + 1)
-    key = placebo_key(meta, noise=0.5, seed=seed)
+    key = placebo_key(meta, noise=key_noise, seed=seed)
     S, R = np.flatnonzero(y == 1), np.flatnonzero(y == 0)
     o = np.argsort(key[R])
     Ra, Rb = R[o[:n]], R[o[n:]]
@@ -137,7 +137,7 @@ def placebo_spread_rep(sim, seed, L_, reps=8, n=N_PER):
         if p_r.get("profile") is not None:
             bases.append(float(w @ np.asarray(p_r["profile"], float)))
     b = np.asarray(bases)
-    return {"L": L_, "seed": seed, "n_draws": len(b),
+    return {"L": L_, "seed": seed, "key_noise": key_noise, "n_draws": len(b),
             "sd": float(b.std(ddof=1)) if len(b) > 1 else float("nan"),
             "mean": float(b.mean()) if len(b) else float("nan"),
             "range": float(b.max() - b.min()) if len(b) > 1 else float("nan")}
@@ -213,7 +213,7 @@ def main():
                   + [f"power{s}_{c}" for s in "AB" for c in range(3)]
                   + [f"prof{s}" for s in "AB"]
                   + [f"key{s}{int(v*10)}" for s in "B" for v in (0.5, 2.0, 5.0)]
-                  + ["depth", "timing"])
+                  + ["depth", "keyspread", "keygrid", "timing"])
         t = time.time()
         for i, sub in enumerate(stages, 1):
             print(f"[{i}/{len(stages)}] {sub}", flush=True)
@@ -274,6 +274,55 @@ def main():
         print(f"   sd at L={depths[-1]} is {ratio:.1f}x that at L={depths[0]}")
         print("   real 49-layer model measured sd(base) = 0.00566 "
               "against T_adj = 0.01079")
+
+    elif st == "keyspread":
+        # Does an uninformative surface key destabilise the baseline? Depth
+        # did not explain the real model's sd(base) = 0.00566. The remaining
+        # difference is that the simulated key tracks the covariate driving
+        # item variation, while on real text it is word count, which may track
+        # nothing. C5 swept this noise and found the false positive rate held,
+        # but it never looked at the baseline's own spread.
+        noises = (0.5, 2.0, 5.0, 20.0)
+        n_sim = a.R or 4
+        jobs = [("B", 8000 + s, 49, kn) for kn in noises for s in range(n_sim)]
+        with ProcessPoolExecutor(max_workers=W_) as ex:
+            out = list(ex.map(_depth_job, jobs))
+        rec = []
+        for kn in noises:
+            g = [o for o in out if o["key_noise"] == kn]
+            rec.append({"key_noise": kn, "n_sims": len(g),
+                        "mean_sd": float(np.mean([o["sd"] for o in g])),
+                        "max_sd": float(np.max([o["sd"] for o in g]))})
+            print(f"   key_noise={kn:>5}: sd(base) mean={rec[-1]['mean_sd']:.5f} "
+                  f"max={rec[-1]['max_sd']:.5f}")
+        res["placebo_key_spread"] = rec
+        print("   real 49-layer model measured sd(base) = 0.00566 "
+              "against T_adj = 0.01079")
+
+    elif st == "keygrid":
+        # Depth alone did nothing. A weak key at 49 layers raised sd(base)
+        # twentyfold. C5 swept key noise at 12 layers and saw the false
+        # positive rate hold. If those are all true the effect is an
+        # interaction, and this is the smallest grid that shows it.
+        grid = [(Ld, kn) for Ld in (12, 49) for kn in (0.5, 5.0)]
+        n_sim = a.R or 6
+        jobs = [("B", 9000 + s, Ld, kn) for Ld, kn in grid
+                for s in range(n_sim)]
+        with ProcessPoolExecutor(max_workers=W_) as ex:
+            out = list(ex.map(_depth_job, jobs))
+        rec = []
+        for Ld, kn in grid:
+            g = [o for o in out if o["L"] == Ld and o["key_noise"] == kn]
+            rec.append({"L": Ld, "key_noise": kn, "n_sims": len(g),
+                        "mean_sd": float(np.mean([o["sd"] for o in g]))})
+            print(f"   L={Ld:>3} key_noise={kn:>4}: "
+                  f"sd(base) mean={rec[-1]['mean_sd']:.5f}")
+        res["placebo_key_depth_grid"] = rec
+        by = {(r["L"], r["key_noise"]): r["mean_sd"] for r in rec}
+        shallow = by[(12, 5.0)] / max(by[(12, 0.5)], 1e-12)
+        deep = by[(49, 5.0)] / max(by[(49, 0.5)], 1e-12)
+        print(f"   weak-key penalty: {shallow:.1f}x at L=12, {deep:.1f}x at L=49")
+        print("   an interaction if the second is much larger than the first")
 
     elif st.startswith("cap"):
         sim, p = st[3], int(st[4:])

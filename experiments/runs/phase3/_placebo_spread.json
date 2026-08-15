@@ -147,7 +147,9 @@
     "mean": -0.0030595833333333373,
     "sd": 0.005659303689150432,
     "min": -0.012787999999999978,
-    "max": 0.0055060000000000005
+    "max": 0.0055060000000000005,
+    "null_sd": 0.0043308654016410994,
+    "sd_ratio": 1.3067373756307332
   },
   "placebo": {
     "status": "ok",
@@ -169,5 +171,5 @@
   },
   "verdict": "Contrast significant (p=0.0075) after recentring on the model's own null depth profile. Evidence of depth-dependent familiarity beyond surface separability. Report an exposure interval only if a same-family calibration exists.",
   "warnings": [],
-  "wallclock_s": 1480.8114593029022
+  "wallclock_s": 1996.0941219329834
 }

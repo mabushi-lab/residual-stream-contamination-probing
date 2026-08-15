@@ -26,7 +26,7 @@
     ],
     "primary": "level-matched recentred depth contrast, label-permutation null"
   },
-  "wallclock_s": 301.92866373062134,
+  "wallclock_s": 383.25831294059753,
   "sim_properties": {
     "A": {
       "rms_growth": 1.001849880671449,
@@ -756,6 +756,58 @@
       "mean_sd": 0.00014371945327616354,
       "max_sd": 0.0005748778131046541,
       "mean_range": 0.00040649999999999367
+    }
+  ],
+  "placebo_key_spread": [
+    {
+      "key_noise": 0.5,
+      "n_sims": 4,
+      "mean_sd": 0.0004928534264870228,
+      "max_sd": 0.001971413705948091
+    },
+    {
+      "key_noise": 2.0,
+      "n_sims": 4,
+      "mean_sd": 0.005232789972502488,
+      "max_sd": 0.010685090570509915
+    },
+    {
+      "key_noise": 5.0,
+      "n_sims": 4,
+      "mean_sd": 0.009736352469508491,
+      "max_sd": 0.013178567966317787
+    },
+    {
+      "key_noise": 20.0,
+      "n_sims": 4,
+      "mean_sd": 0.008808000944983917,
+      "max_sd": 0.012126268346032925
+    }
+  ],
+  "placebo_key_depth_grid": [
+    {
+      "L": 12,
+      "key_noise": 0.5,
+      "n_sims": 6,
+      "mean_sd": 0.0020739011604076207
+    },
+    {
+      "L": 12,
+      "key_noise": 5.0,
+      "n_sims": 6,
+      "mean_sd": 0.009375716338351022
+    },
+    {
+      "L": 49,
+      "key_noise": 0.5,
+      "n_sims": 6,
+      "mean_sd": 0.001151175482801858
+    },
+    {
+      "L": 49,
+      "key_noise": 5.0,
+      "n_sims": 6,
+      "mean_sd": 0.00795954645374214
     }
   ]
 }

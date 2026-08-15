@@ -253,8 +253,26 @@ def audit(args):
     # The placebo enters the observed statistic, never the null, so one null
     # serves both. The previous code recomputed the whole permutation batch to
     # produce the uncorrected comparison.
-    ct = finalise_contrast(ba, tnull, prof)
+    base_sd = None if placebo_spread is None else placebo_spread["sd"]
+    ct = finalise_contrast(ba, tnull, prof, base_sd=base_sd,
+                           rng=np.random.default_rng(args.seed + 5))
     raw = finalise_contrast(ba, tnull, None)
+
+    # The decisive ratio. The null treats the baseline as known, so when the
+    # placebo's own spread approaches the null's the p-value is not usable.
+    if placebo_spread is not None and ct.get("null_sd"):
+        ratio = placebo_spread["sd"] / ct["null_sd"]
+        placebo_spread["null_sd"] = ct["null_sd"]
+        placebo_spread["sd_ratio"] = float(ratio)
+        note = ("negligible against the null" if ratio < 0.25 else
+                "a substantial share of the null" if ratio < 0.75 else
+                "LARGER THAN THE NULL ITSELF")
+        print(f"  sd(baseline)={placebo_spread['sd']:.5f} vs "
+              f"sd(null)={ct['null_sd']:.5f}  ratio={ratio:.2f}, {note}")
+        if ct.get("p_value_baseline_inflated") is not None:
+            print(f"  p with the baseline's own variance propagated: "
+                  f"{ct['p_value_baseline_inflated']:.4f}  "
+                  f"(vs {ct['p_value']:.4f} holding it fixed)")
 
     recentred = prof is not None
 
@@ -327,14 +345,40 @@ def audit(args):
                           "Supply a surface key with spread, or more reference "
                           "items.")
     elif ct["p_value"] < args.alpha:
+        # Second gate, alongside Requirement E. The p-value above holds the
+        # placebo baseline fixed, but it is estimated, and when its own spread
+        # rivals the null's the significance can be an artefact of which split
+        # the search happened to draw. Measured on a real audit: sd 0.0057
+        # against a null sd of 0.0043, turning p = 0.0075 into about 0.065.
+        p_i = ct.get("p_value_baseline_inflated")
+        ratio = (placebo_spread or {}).get("sd_ratio")
         pre = ("[REQUIREMENT E OVERRIDDEN] " if exch == "failed" else
                "[EXCHANGEABILITY MARGINAL] " if exch == "marginal" else "")
-        out["verdict"] = (pre
-                          + f"Contrast significant (p={ct['p_value']:.4f}) after "
-                          "recentring on the model's own null depth profile. "
-                          "Evidence of depth-dependent familiarity beyond "
-                          "surface separability. Report an exposure interval "
-                          "only if a same-family calibration exists.")
+        if placebo_spread is None:
+            out["verdict"] = (
+                pre + f"PROVISIONAL. Contrast significant (p="
+                f"{ct['p_value']:.4f}) holding the placebo baseline fixed, but "
+                "the baseline is an estimate and its variance has not been "
+                "measured. Re-run with --placebo-reps 8 before reporting "
+                "this: on a real audit that correction turned p = 0.0075 into "
+                "0.065.")
+        elif p_i is not None and p_i >= args.alpha:
+            out["verdict_blocked"] = True
+            out["verdict"] = (
+                pre + f"NO VERDICT. The contrast is significant (p="
+                f"{ct['p_value']:.4f}) only while the placebo baseline is "
+                f"treated as known. Its measured standard deviation is "
+                f"{placebo_spread['sd']:.5f}, {ratio:.2f} times the null's "
+                f"own, and propagating it gives p = {p_i:.4f}. The result is "
+                "inside the noise of the correction used to produce it.")
+        else:
+            out["verdict"] = (
+                pre + f"Contrast significant (p={ct['p_value']:.4f}, "
+                f"p={p_i:.4f} with the baseline's variance propagated) after "
+                "recentring on the model's own null depth profile. Evidence "
+                "of depth-dependent familiarity beyond surface separability. "
+                "Report an exposure interval only if a same-family "
+                "calibration exists.")
     else:
         out["verdict"] = (f"Contrast null (p={ct['p_value']:.4f}). No evidence "
                           "at this sensitivity. Report the detection floor so "

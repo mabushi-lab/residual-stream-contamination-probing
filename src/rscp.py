@@ -503,10 +503,28 @@ def finalise_contrast(
     tnull: np.ndarray,
     placebo_profile: np.ndarray | None,
     weights: np.ndarray | None = None,
+    base_sd: float | None = None,
+    rng: np.random.Generator | None = None,
 ) -> dict:
     """Recentre and test, given a null from ``streaming_profile_and_null``.
 
     Output matches ``recentred_contrast_test`` field for field.
+
+    ``base_sd`` is the sampling standard deviation of the placebo baseline,
+    measured by re-estimating it across split seeds. Supply it and the null is
+    widened to account for it, which is the honest test.
+
+    The permutation null describes the variability of the observed contrast
+    with the baseline held fixed. But the baseline is itself an estimate, from
+    a random split of the reference set at a searched noise level, and its
+    spread depends on how well the surface key tracks what separates the two
+    sets. Measured on a real 49-layer audit it was 0.0057 against a null
+    standard deviation of 0.0043, so the unmodelled component was the larger
+    of the two and an apparent p of 0.0075 was really about 0.065.
+
+    Widening assumes the baseline's error is independent of the permutation
+    null and roughly normal. Both are approximations, and both are far better
+    than treating an estimated quantity as known.
     """
     ba = np.asarray(ba_observed, dtype=float)
     w = profile_weights(len(ba)) if weights is None else np.asarray(weights)
@@ -518,9 +536,24 @@ def finalise_contrast(
     obs = raw - base
     B = len(tnull)
     p = float((1.0 + np.sum(tnull >= obs)) / (1.0 + B))
+
+    p_infl = None
+    if base_sd is not None and base_sd > 0 and placebo_profile is not None:
+        r = rng or np.random.default_rng(20260815)
+        widened = np.asarray(tnull) + r.normal(0.0, float(base_sd), B)
+        p_infl = float((1.0 + np.sum(widened >= obs)) / (1.0 + B))
+
     return {"T_adj": obs, "T_raw": raw, "baseline": base, "p_value": p,
+            "p_value_baseline_inflated": p_infl,
+            "base_sd": None if base_sd is None else float(base_sd),
             "ba_by_layer": [float(v) for v in ba],
             "null_q95": float(np.quantile(tnull, 0.95)),
+            # Reported so it can be compared against the placebo's own spread.
+            # The null is built by permuting labels in the observed comparison
+            # and treats `base` as a known constant. When the baseline's
+            # sampling standard deviation approaches this one, the p-value
+            # understates the uncertainty and the verdict is not trustworthy.
+            "null_sd": float(np.std(tnull, ddof=1)),
             "recentred": placebo_profile is not None}
 
 

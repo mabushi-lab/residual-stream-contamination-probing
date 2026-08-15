@@ -19,4 +19,4 @@ uncorrected      T=+0.00507  p=0.1194  (shown only to expose the baseline's effe
 VERDICT
   Contrast significant (p=0.0075) after recentring on the model's own null depth profile. Evidence of depth-dependent familiarity beyond surface separability. Report an exposure interval only if a same-family calibration exists.
 
-ran in 1480.8s
+ran in 1996.1s
