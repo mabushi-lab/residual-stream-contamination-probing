@@ -61,10 +61,12 @@ from rscp import (
     correctness_vector,
     cross_fit_smoother,
     lam_for_df,
+    finalise_contrast,
     layer_profile,
     level_matched_placebo,
     profile_weights,
     recentred_contrast_test,
+    streaming_profile_and_null,
     surface_features,
 )
 
@@ -194,9 +196,15 @@ def audit(args):
           f"nuisance block {nuis.shape[1]} dims")
 
     # --- observed depth profile ---------------------------------------
+    # One pass. Retaining a dense (N, N) smoother per layer per seed costs
+    # 17.6 GB at 49 layers and N = 3000, which is what killed the first Phase 3
+    # attempt. The null consumes them a layer at a time regardless, so they are
+    # accumulated and released rather than held.
     idx = np.arange(len(y))
-    ba, sms = layer_profile(layers, idx, y, cfg)
-    ba_n, _ = layer_profile([nuis], idx, y, cfg)
+    ba, tnull = streaming_profile_and_null(
+        layers, idx, y, cfg, B=cfg.n_bootstrap,
+        rng=np.random.default_rng(args.seed))
+    ba_n, _ = layer_profile([nuis], idx, y, cfg, keep_smoothers=False)
     ba_nuis = float(ba_n[0])
 
     # --- level-matched placebo baseline --------------------------------
@@ -210,10 +218,11 @@ def audit(args):
     plc = level_matched_placebo(layers, ref_idx, key, float(ba[0]), cfg)
     prof = plc.get("profile")
 
-    ct = recentred_contrast_test(ba, sms, y, prof, B=cfg.n_bootstrap,
-                                 rng=np.random.default_rng(args.seed))
-    raw = recentred_contrast_test(ba, sms, y, None, B=cfg.n_bootstrap,
-                                  rng=np.random.default_rng(args.seed))
+    # The placebo enters the observed statistic, never the null, so one null
+    # serves both. The previous code recomputed the whole permutation batch to
+    # produce the uncorrected comparison.
+    ct = finalise_contrast(ba, tnull, prof)
+    raw = finalise_contrast(ba, tnull, None)
 
     recentred = prof is not None
 

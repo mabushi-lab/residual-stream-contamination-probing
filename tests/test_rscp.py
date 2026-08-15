@@ -36,8 +36,10 @@ from rscp import (
     lam_for_df,
     layer_profile,
     level_matched_placebo,
+    finalise_contrast,
     profile_weights,
     recentred_contrast_test,
+    streaming_profile_and_null,
     surface_features,
 )
 from simulators import SIMULATORS, layer_bump, placebo_key
@@ -185,6 +187,51 @@ def test_recentring_subtracts_the_baseline_contrast():
     assert abs(out["T_raw"] - w @ ba) < 1e-12
     assert abs(out["baseline"] - w @ plc) < 1e-12
     assert abs(out["T_adj"] - (w @ ba - w @ plc)) < 1e-12
+
+
+def test_streaming_path_agrees_with_the_retained_path():
+    """The memory fix must not move a single reported number.
+
+    layer_profile retains layers x seeds dense (N, N) smoothers, which is
+    17.6 GB at 49 layers and N = 3000 and is why the first Phase 3 run was
+    killed. streaming_profile_and_null holds one layer at a time. This asserts
+    the two produce the same profile, the same null and the same p-value, so
+    the fix is a memory change and nothing else.
+    """
+    rng = np.random.default_rng(3)
+    L, n, d = 6, 30, 8
+    y = np.array([1] * n + [0] * n)
+    layers = [rng.standard_normal((2 * n, d))
+              + (2.0 * y - 1.0)[:, None] * 0.05 * k for k in range(L)]
+    idx = np.arange(2 * n)
+    plc = np.linspace(0.52, 0.56, L)
+
+    ba_ret, sms = layer_profile(layers, idx, y, CFG)
+    ret = recentred_contrast_test(ba_ret, sms, y, plc, B=64,
+                                  rng=np.random.default_rng(11))
+    ba_str, tnull = streaming_profile_and_null(
+        layers, idx, y, CFG, B=64, rng=np.random.default_rng(11))
+    strm = finalise_contrast(ba_str, tnull, plc)
+
+    assert np.allclose(ba_ret, ba_str, atol=1e-12)
+    assert abs(ret["T_raw"] - strm["T_raw"]) < 1e-12
+    assert abs(ret["baseline"] - strm["baseline"]) < 1e-12
+    assert abs(ret["T_adj"] - strm["T_adj"]) < 1e-12
+    assert abs(ret["null_q95"] - strm["null_q95"]) < 1e-10
+    assert ret["p_value"] == strm["p_value"]
+
+
+def test_layer_profile_can_skip_retaining_smoothers():
+    """keep_smoothers=False must change memory, not the profile."""
+    rng = np.random.default_rng(5)
+    y = np.array([1] * 25 + [0] * 25)
+    layers = [rng.standard_normal((50, 6)) for _ in range(4)]
+    idx = np.arange(50)
+    kept, sms = layer_profile(layers, idx, y, CFG, keep_smoothers=True)
+    dropped, none = layer_profile(layers, idx, y, CFG, keep_smoothers=False)
+    assert none is None
+    assert len(sms) == len(layers)
+    assert np.allclose(kept, dropped, atol=1e-12)
 
 
 # --------------------------------------------------------------------------

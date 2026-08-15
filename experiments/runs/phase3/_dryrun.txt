@@ -19,6 +19,6 @@ uncorrected      T=-0.00961  p=0.9395  (shown only to expose the baseline's effe
 VERDICT
   Contrast null (p=0.9965). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.
 
-ran in 6.5s
+ran in 3.6s
 
 DRY RUN: activations are synthetic noise. Pipeline check only.

@@ -832,11 +832,13 @@ Item margins from \S\ref{sec:adjusted} produce a per-item score that is not a di
 
 \paragraph{L10. Small models may not show the phenomenon.} If the familiarity direction emerges only above some scale, results at 160M to 2.8B will be uninformative about the models people actually evaluate. The scale trend across the Pythia suite is the diagnostic, and a flat or non-monotone trend should be reported as failure to establish the effect rather than smoothed over.
 
-\paragraph{L11. Multiplicity.} The contrast is a single pre-registered test per model and item pool, but auditing many benchmarks, models and extraction points reintroduces multiplicity; fix the analysis plan in advance and apply Benjamini-Hochberg across the pre-registered family \cite{benjamini1995fdr}.
+\paragraph{L11. The placebo can only match where the surface key reaches.} The baseline is built by splitting the reference set at the extremes of a surface key, and the search picks whichever split lands closest to the observed layer-0 separability. Both the search and its target are therefore bounded by what that key can produce. Phase 3 shows the failure in both directions: on the full-record arm the match is within \PthreeGapLo{}, but on the short-prefix arm the placebo reaches only $0.497$ against an observed $0.515$, and in an earlier run at half the sample size the observed profile fell below chance, which a key-based split cannot reproduce at all because splitting on any key produces some separability. When the observed level lies outside the key's attainable range the recentring is approximate, and the residual mismatch is a bias of unknown sign. The match gap is reported for exactly this reason and should be read before the contrast.
 
-\paragraph{L12. Statistical power.} With $n$ in the low thousands and effect sizes of a few balanced-accuracy points, power is limited (\S\ref{sec:phase0}), and underpowered designs produce unreliable literatures \cite{card2020power,dror2018hitchhiker}. Power should be computed from the calibration curve before collection; a study that cannot reach $0.8$ at the target $m$ should say so rather than run.
+\paragraph{L12. Multiplicity.} The contrast is a single pre-registered test per model and item pool, but auditing many benchmarks, models and extraction points reintroduces multiplicity; fix the analysis plan in advance and apply Benjamini-Hochberg across the pre-registered family \cite{benjamini1995fdr}.
 
-\paragraph{L13. Dual use.} A reliable membership detector applied to individuals' text is a privacy attack \cite{carlini2021extracting,nasr2023scalable}. The set-level framing limits this, but item margins are individual scores and the calibration would transfer. Released artefacts should be restricted to benchmark items and public-corpus documents.
+\paragraph{L13. Statistical power.} With $n$ in the low thousands and effect sizes of a few balanced-accuracy points, power is limited (\S\ref{sec:phase0}), and underpowered designs produce unreliable literatures \cite{card2020power,dror2018hitchhiker}. Power should be computed from the calibration curve before collection; a study that cannot reach $0.8$ at the target $m$ should say so rather than run.
+
+\paragraph{L14. Dual use.} A reliable membership detector applied to individuals' text is a privacy attack \cite{carlini2021extracting,nasr2023scalable}. The set-level framing limits this, but item margins are individual scores and the calibration would transfer. Released artefacts should be restricted to benchmark items and public-corpus documents.
 
 \section{Phase 1: the Protocol on Real Models}
 \label{sec:phase1}
@@ -943,12 +945,19 @@ separate the injected half from the withheld half. This is the only arm in the
 paper where that is true, and it is worth contrasting with the
 \PoneWkNuisLo{}--\PoneWkNuisHi{} of the temporal split.
 
-At $m=\PthreeDup{}$ duplications the contrast is null
-($T_{\mathrm{adj}}=\PthreeTadjFull{}$, $p=\PthreePFull{}$). We ran it twice,
-differing only in how much of each record the probe reads, because a null on a
-ten-word prefix would say more about the prefix than about the instrument.
-Extending to the full record, which is what the model was trained on, does not
-change the outcome, and both adjusted statistics are negative.
+At $m=\PthreeDup{}$ duplications the contrast is null under both arms, with
+$p$ between \PthreePLo{} and \PthreePHi{}. We ran it twice at the same sample
+size, differing only in how much of each record the probe reads, because a
+null on a \PthreeWordsGoal{}-word prefix would say more about the prefix than
+about the instrument. Extending to the full record, \PthreeWordsFull{} words
+and what the model was actually trained on, does not change the outcome.
+
+Both adjusted statistics are positive and neither is significant, and the
+smaller of the two $p$ values, \PthreePLo{}, is worth quoting rather than
+rounding away. It is not evidence: two tests neither of which clears $0.05$,
+and at half this sample size the full-record arm carried the opposite sign. A
+statistic that changes sign as items are added is behaving like noise around
+zero.
 
 Two things follow. The null should be read at the sensitivity
 \S\ref{sec:phase0} establishes, which is a real but bounded one, rather than as
@@ -962,19 +971,26 @@ duplication count fifty times higher.
 \includegraphics[width=0.96\textwidth]{p3_profiles_paper.pdf}
 \caption{Phase 3, measured. Observed depth profile against the level-matched
 placebo baseline on \citeauthor{oren2024proving}'s contaminated 1.4B
-checkpoint, PIQA injected at $m=\PthreeDup{}$, under two prefix lengths. The
-baseline is not flat in either panel and changes shape with prefix length,
-which is why it has to be measured rather than assumed. Neither observed
-profile departs from it significantly.}
+checkpoint, PIQA injected at $m=\PthreeDup{}$, under two prefix lengths at the
+same sample size. The baseline is not flat in either panel, and its range
+scales with prefix length, which is why it has to be measured rather than
+assumed. Neither observed profile departs from it significantly.}
 \label{fig:phase3}
 \end{figure*}
 
 The baseline profile is again not flat, spanning \PthreeSpanLo{} to
-\PthreeSpanHi{} accuracy points, and its shape changes with prefix length
-(Figure~\ref{fig:phase3}): falling on the short prefix, humped with a peak at
-layer \PthreePeakFull{} on the full record. Surface separability's depth
-profile is a property of the inputs as well as the model, which is a further
-reason it cannot be assumed.
+\PthreeSpanHi{} accuracy points, and its range scales with prefix length: the
+wider span belongs to the full record (Figure~\ref{fig:phase3}). Both arms
+peak in the first few layers. Surface separability is therefore a property of
+the inputs as well as of the model, which is a further reason its depth
+profile cannot be assumed.
+
+We report this comparison at a single sample size deliberately. An earlier
+pairing ran the short prefix at half the items and appeared to show the
+profile changing \emph{shape}, falling rather than humped. That difference did
+not survive matching the sample sizes, and reporting it would have been the
+same error this paper is about: reading a difference off two arms that
+differed in more than one respect.
 
 \subsection{What this does not show}
 

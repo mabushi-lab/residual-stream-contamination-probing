@@ -298,20 +298,29 @@ def _ba_perm_batch(smoothers: Sequence[np.ndarray], Y: np.ndarray) -> np.ndarray
     return out / len(smoothers)
 
 
-def layer_profile(layer_activations, idx, y, cfg):
-    """Per-layer balanced accuracy and the smoothers that produced it."""
+def layer_profile(layer_activations, idx, y, cfg, keep_smoothers: bool = True):
+    """Per-layer balanced accuracy and the smoothers that produced it.
+
+    Each smoother is dense and (N, N), and there is one per layer per fold
+    seed, so retaining them costs ``layers x seeds x N^2 x 8`` bytes: 17.6 GB
+    at 49 layers, 5 seeds and N = 3000. Callers that only want the profile
+    should pass ``keep_smoothers=False``, which returns ``(ba, None)`` and
+    holds one layer at a time. ``streaming_profile_and_null`` avoids the cost
+    even when the null is needed.
+    """
     idx = np.asarray(idx)
     y = np.asarray(y).astype(int)
     N = idx.size
     pos, neg = np.flatnonzero(y == 1), np.flatnonzero(y == 0)
-    ba, sms = [], []
+    ba, sms = [], ([] if keep_smoothers else None)
     for H in layer_activations:
         X = np.asarray(H)[idx]
         lam = lam_for_df(X, cfg.target_df)
         sm = [cross_fit_smoother(
                   X, _make_folds(N, cfg.n_folds, np.random.default_rng(s)), lam)
               for s in cfg.seeds]
-        sms.append(sm)
+        if keep_smoothers:
+            sms.append(sm)
         ba.append(_ba_from_c(correctness_vector(sm, y), pos, neg))
     return np.asarray(ba), sms
 
@@ -364,13 +373,16 @@ def level_matched_placebo(
         kk = k0 + nz * k0.std() * rs.standard_normal(k0.size)
         o = np.argsort(kk)
         cand = idx[np.concatenate([o[len(o) - n:], o[:n]])]
-        ba0, _ = layer_profile(layer_activations[:1], cand, y, cfg)
+        ba0, _ = layer_profile(layer_activations[:1], cand, y, cfg,
+                               keep_smoothers=False)
         gap = abs(float(ba0[0]) - target_ba0)
         if best is None or gap < best[0]:
             best = (gap, cand, float(ba0[0]), nz)
 
     gap, cand, ba0, nz = best
-    ba, _ = layer_profile(layer_activations, cand, y, cfg)
+    # The placebo needs the profile, never the smoothers.
+    ba, _ = layer_profile(layer_activations, cand, y, cfg,
+                          keep_smoothers=False)
     return {"status": "ok", "profile": ba, "ba0": ba0, "target_ba0": target_ba0,
             "match_gap": gap, "chosen_noise": nz, "n_per_side": int(n)}
 
@@ -420,6 +432,91 @@ def recentred_contrast_test(
 
     Y = np.stack([rng.permutation(y) for _ in range(B)], axis=1).astype(float)
     tnull = w @ np.stack([_ba_perm_batch(sm, Y) for sm in smoothers])
+    p = float((1.0 + np.sum(tnull >= obs)) / (1.0 + B))
+    return {"T_adj": obs, "T_raw": raw, "baseline": base, "p_value": p,
+            "ba_by_layer": [float(v) for v in ba],
+            "null_q95": float(np.quantile(tnull, 0.95)),
+            "recentred": placebo_profile is not None}
+
+
+def streaming_profile_and_null(
+    layer_activations,
+    idx: np.ndarray,
+    y: np.ndarray,
+    cfg: "RSCPConfig | None" = None,
+    weights: np.ndarray | None = None,
+    B: int = 2000,
+    rng: np.random.Generator | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Observed depth profile and the contrast's permutation null, one pass.
+
+    ``layer_profile`` followed by ``recentred_contrast_test`` computes exactly
+    this, but retains every smoother until the null is evaluated. Since the
+    null consumes them one layer at a time anyway, nothing requires holding
+    them: this accumulates the weighted contribution per layer and releases
+    the layer's smoothers immediately. Peak memory goes from
+    ``layers x seeds x N^2`` to ``seeds x N^2``, which at 49 layers, 5 seeds
+    and N = 3000 is 17.6 GB against 0.36 GB.
+
+    The arithmetic is the same operations in the same order per layer, on the
+    same permutations, so results agree to floating-point tolerance. They are
+    not guaranteed bit-identical: the retained path forms the weighted sum as
+    one BLAS dot product over layers, this one accumulates sequentially, and
+    the two associate the additions differently. ``test_rscp.py`` asserts the
+    two paths agree.
+
+    The placebo baseline does not enter the null, only the observed statistic,
+    so recentring happens afterwards in ``finalise_contrast``. That is what
+    lets this be a single pass: the placebo needs ``ba[0]``, which is not
+    known until the pass is done.
+    """
+    cfg = cfg or RSCPConfig()
+    rng = rng or np.random.default_rng(0)
+    idx = np.asarray(idx)
+    y = np.asarray(y).astype(int)
+    N = idx.size
+    pos, neg = np.flatnonzero(y == 1), np.flatnonzero(y == 0)
+    L = len(layer_activations)
+    w = profile_weights(L) if weights is None else np.asarray(weights, float)
+    if abs(w.sum()) > 1e-9:
+        raise ValueError("contrast weights must sum to zero")
+
+    # Drawn once, before the loop, so every layer sees the same permutations.
+    Y = np.stack([rng.permutation(y) for _ in range(B)], axis=1).astype(float)
+
+    ba = np.empty(L, dtype=float)
+    tnull = np.zeros(B, dtype=float)
+    for i, H in enumerate(layer_activations):
+        X = np.asarray(H)[idx]
+        lam = lam_for_df(X, cfg.target_df)
+        sm = [cross_fit_smoother(
+                  X, _make_folds(N, cfg.n_folds, np.random.default_rng(s)), lam)
+              for s in cfg.seeds]
+        ba[i] = _ba_from_c(correctness_vector(sm, y), pos, neg)
+        tnull += w[i] * _ba_perm_batch(sm, Y)
+        del sm                      # the point of the exercise
+    return ba, tnull
+
+
+def finalise_contrast(
+    ba_observed: np.ndarray,
+    tnull: np.ndarray,
+    placebo_profile: np.ndarray | None,
+    weights: np.ndarray | None = None,
+) -> dict:
+    """Recentre and test, given a null from ``streaming_profile_and_null``.
+
+    Output matches ``recentred_contrast_test`` field for field.
+    """
+    ba = np.asarray(ba_observed, dtype=float)
+    w = profile_weights(len(ba)) if weights is None else np.asarray(weights)
+    if abs(w.sum()) > 1e-9:
+        raise ValueError("contrast weights must sum to zero")
+    raw = float(w @ ba)
+    base = 0.0 if placebo_profile is None else float(
+        w @ np.asarray(placebo_profile, dtype=float))
+    obs = raw - base
+    B = len(tnull)
     p = float((1.0 + np.sum(tnull >= obs)) / (1.0 + B))
     return {"T_adj": obs, "T_raw": raw, "baseline": base, "p_value": p,
             "ba_by_layer": [float(v) for v in ba],
