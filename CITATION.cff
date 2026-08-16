@@ -6,8 +6,11 @@ abstract: >-
   baseline for detecting benchmark contamination from a model's residual
   stream. Includes the statistical core, the Phase 0c validation study, two
   generative simulators, the item-set builders, and the Phase 1 nuisance
-  audit of published membership-inference splits, and the Phase 3 positive
-  control on deliberately contaminated checkpoints.
+  audit of published membership-inference splits, and the Phase 3 audits of
+  deliberately contaminated checkpoints. Phase 3 measures the placebo
+  baseline's own sampling variance and finds it larger than the permutation
+  null's in every arm, so the protocol propagates it and withholds a verdict
+  when significance does not survive.
 type: software
 license: MIT
 authors:
@@ -16,8 +19,8 @@ authors:
     email: braunf25@proton.me
     orcid: "https://orcid.org/0009-0003-5285-9327"
 
-version: 1.0.1
-date-released: 2026-08-14
+version: 1.2.0
+date-released: 2026-08-15
 
 repository-code: "https://github.com/mabushi-lab/residual-stream-contamination-probing"
 
