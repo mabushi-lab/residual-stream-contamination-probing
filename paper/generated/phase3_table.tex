@@ -2,14 +2,16 @@
 \small
 \centering
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lrrrrl@{}}
+\begin{tabular}{@{}rlrrrrrl@{}}
 \toprule
-Prefix & words & $\BA_{\nuis}$ & baseline span & $T_{\mathrm{adj}}$ & Outcome \\
+$m$ & Prefix & $\BA_{\nuis}$ & $T_{\mathrm{adj}}$ & $p$ & $\frac{\mathrm{sd(base)}}{\mathrm{sd(null)}}$ & $p^{*}$ & Outcome \\
 \midrule
-full record & 44 & 0.515 & 3.0 pts & +0.0035 & null, $p=0.210$ \\
-question only & 7 & 0.508 & 1.4 pts & +0.0049 & null, $p=0.080$ \\
+50 & full record & 0.515 & +0.0035 & 0.210 & 1.30 & 0.312 & null \\
+50 & question only & 0.508 & +0.0049 & 0.080 & 1.56 & 0.221 & null \\
+7 & full record & 0.514 & +0.0108 & 0.007 & 1.31 & 0.074 & no verdict \\
+7 & question only & 0.509 & -0.0046 & 0.909 & 1.30 & 0.803 & null \\
 \bottomrule
 \end{tabular}
-\caption{Phase 3, measured. Oren et al.'s deliberately contaminated 1.4B checkpoint, PIQA injected at $m=50$. Both arms are the same test file split at random before training, so Requirement E holds by construction and $\BA_{\nuis}$ confirms it. The two rows differ only in how much of each record the probe reads. Neither is significant, so the null is not an artefact of a short prefix.}
+\caption{Phase 3, measured. \citeauthor{oren2024proving}'s contaminated 1.4B checkpoints, PIQA injected at two duplication counts. Both arms are the same test file split at random before training, so Requirement E holds by construction and $\BA_{\nuis}$ confirms it. $p$ holds the placebo baseline fixed, as the protocol originally specified; $p^{*}$ propagates the baseline's own sampling variance, measured over eight split seeds. The ratio column is that variance against the null's. It exceeds one in every arm, which is why the one nominally significant result carries no verdict.}
 \label{tab:phase3}
 \end{table}

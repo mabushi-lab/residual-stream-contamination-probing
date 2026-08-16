@@ -70,6 +70,7 @@
     0.5513333333333332,
     0.5226666666666667
   ],
+  "placebo_spread": null,
   "placebo": {
     "status": "ok",
     "ba0": 0.49733333333333335,
@@ -82,6 +83,8 @@
     "T_raw": -0.009607142857142925,
     "baseline": 0.006841269841269829,
     "p_value": 0.9965017491254373,
+    "null_sd": 0.006262644723077541,
+    "p_value_baseline_inflated": null,
     "recentred": true
   },
   "contrast_uncorrected": {
@@ -90,5 +93,5 @@
   },
   "verdict": "Contrast null (p=0.9965). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.",
   "warnings": [],
-  "wallclock_s": 5.012176990509033
+  "wallclock_s": 4.773148775100708
 }

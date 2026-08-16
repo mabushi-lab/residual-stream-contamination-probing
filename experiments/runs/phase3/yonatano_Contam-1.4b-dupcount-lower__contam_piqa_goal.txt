@@ -19,4 +19,4 @@ uncorrected      T=-0.00012  p=0.5222  (shown only to expose the baseline's effe
 VERDICT
   Contrast null (p=0.9085). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.
 
-ran in 1078.1s
+ran in 1780.1s

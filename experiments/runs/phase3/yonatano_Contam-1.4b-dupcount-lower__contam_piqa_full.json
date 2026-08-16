@@ -142,6 +142,15 @@
     0.49600000000000005,
     0.4972
   ],
+  "placebo_spread": {
+    "reps": 8,
+    "mean": -0.0030595833333333373,
+    "sd": 0.005659303689150432,
+    "min": -0.012787999999999978,
+    "max": 0.0055060000000000005,
+    "null_sd": 0.0043308654016410994,
+    "sd_ratio": 1.3067373756307332
+  },
   "placebo": {
     "status": "ok",
     "ba0": 0.507,
@@ -154,13 +163,16 @@
     "T_raw": 0.005069750000000005,
     "baseline": -0.005718000000000001,
     "p_value": 0.0074962518740629685,
+    "null_sd": 0.0043308654016410994,
+    "p_value_baseline_inflated": 0.07446276861569215,
     "recentred": true
   },
   "contrast_uncorrected": {
     "T": 0.005069750000000005,
     "p_value": 0.11944027986006997
   },
-  "verdict": "Contrast significant (p=0.0075) after recentring on the model's own null depth profile. Evidence of depth-dependent familiarity beyond surface separability. Report an exposure interval only if a same-family calibration exists.",
+  "verdict": "NO VERDICT. The contrast is significant (p=0.0075) only while the placebo baseline is treated as known. Its measured standard deviation is 0.00566, 1.31 times the null's own, and propagating it gives p = 0.0745. The result is inside the noise of the correction used to produce it.",
   "warnings": [],
-  "wallclock_s": 2999.9879381656647
+  "wallclock_s": 1892.6343488693237,
+  "verdict_blocked": true
 }

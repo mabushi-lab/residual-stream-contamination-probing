@@ -36,6 +36,7 @@ from rscp import (
     lam_for_df,
     layer_profile,
     level_matched_placebo,
+    contrast_verdict,
     finalise_contrast,
     profile_weights,
     recentred_contrast_test,
@@ -219,6 +220,97 @@ def test_streaming_path_agrees_with_the_retained_path():
     assert abs(ret["T_adj"] - strm["T_adj"]) < 1e-12
     assert abs(ret["null_q95"] - strm["null_q95"]) < 1e-10
     assert ret["p_value"] == strm["p_value"]
+
+
+def test_baseline_variance_can_overturn_significance():
+    """The measured Phase 3 case, reproduced as a unit test.
+
+    On yonatano/Contam-1.4b-dupcount-lower the contrast was T_adj = 0.01079
+    against a permutation null of sd 0.00433, giving p = 0.0075. The placebo
+    baseline's own sd, measured across eight split seeds, was 0.00566: larger
+    than the null's. Propagating it puts p near 0.065.
+
+    A significant result that survives only while an estimated quantity is
+    treated as known is not a result, and this asserts the machinery says so.
+    """
+    L = 13
+    w = profile_weights(L)
+    obs = 0.01079
+    ba = obs * w / float(w @ w)          # so that w @ ba == obs
+    plc = np.zeros(L)
+    rng = np.random.default_rng(0)
+    tnull = rng.normal(0.0, 0.00433, 40000)
+
+    fixed = finalise_contrast(ba, tnull, plc)
+    infl = finalise_contrast(ba, tnull, plc, base_sd=0.00566,
+                             rng=np.random.default_rng(1))
+
+    assert abs(fixed["T_adj"] - obs) < 1e-9
+    assert fixed["p_value"] < 0.05, "should be significant holding base fixed"
+    assert infl["p_value_baseline_inflated"] > 0.05, \
+        "propagating the baseline's variance should overturn it"
+    assert infl["p_value_baseline_inflated"] > fixed["p_value"]
+    # Widening pulls the upper-tail p toward 0.5 from whichever side it sits:
+    # it raises p for a positive statistic and lowers it for a negative one.
+    # Measured on the m = 7 arms, 0.0075 rose to 0.0745 while 0.9085 fell to
+    # 0.8031. Zero widening must leave p where it was.
+    assert finalise_contrast(ba, tnull, plc, base_sd=1e-9,
+                             rng=np.random.default_rng(2)
+                             )["p_value_baseline_inflated"] \
+        == pytest.approx(fixed["p_value"], abs=5e-3)
+
+
+def _verdict(**kw):
+    base = dict(exchangeability="ok", ba_nuisance=0.51, nuis_block=0.75,
+                acknowledged=False, recentred=True, placebo_status="ok",
+                p_value=0.5, p_value_inflated=None, base_sd=None,
+                sd_ratio=None, alpha=0.05)
+    base.update(kw)
+    return contrast_verdict(**base)
+
+
+def test_requirement_e_blocks_the_verdict():
+    v, blocked = _verdict(exchangeability="failed", ba_nuisance=0.856,
+                          p_value=0.0005)
+    assert blocked and "NO VERDICT" in v and "0.856" in v
+
+
+def test_requirement_e_can_be_overridden_but_is_flagged():
+    v, blocked = _verdict(exchangeability="failed", acknowledged=True,
+                          p_value=0.0005, base_sd=0.0001, sd_ratio=0.02,
+                          p_value_inflated=0.0006)
+    assert not blocked and v.startswith("[REQUIREMENT E OVERRIDDEN]")
+
+
+def test_no_baseline_admits_no_claim():
+    v, blocked = _verdict(recentred=False, placebo_status="degenerate key",
+                          p_value=0.001)
+    assert not blocked and "NO BASELINE" in v
+
+
+def test_significant_without_a_measured_baseline_variance_is_provisional():
+    v, blocked = _verdict(p_value=0.004)
+    assert not blocked and "PROVISIONAL" in v and "--placebo-reps" in v
+
+
+def test_baseline_variance_blocks_a_significant_contrast():
+    """The measured Phase 3 case, through the gate rather than around it."""
+    v, blocked = _verdict(p_value=0.0075, p_value_inflated=0.065,
+                          base_sd=0.00566, sd_ratio=1.31)
+    assert blocked
+    assert "NO VERDICT" in v and "0.0075" in v and "0.065" in v
+
+
+def test_significance_survives_a_stable_baseline():
+    v, blocked = _verdict(p_value=0.0075, p_value_inflated=0.0090,
+                          base_sd=0.0004, sd_ratio=0.09)
+    assert not blocked and v.startswith("Contrast significant")
+
+
+def test_null_is_null_regardless_of_baseline_variance():
+    for sd, ratio in [(None, None), (0.02, 5.0)]:
+        v, blocked = _verdict(p_value=0.42, base_sd=sd, sd_ratio=ratio)
+        assert not blocked and "Contrast null" in v
 
 
 def test_layer_profile_can_skip_retaining_smoothers():

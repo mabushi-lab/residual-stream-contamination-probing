@@ -40,6 +40,11 @@ SETS="${SETS:-piqa}"
 # to the instrument rather than to the prefix. 'full' is the whole record,
 # which is what the model was trained on.
 PREFIX="${PREFIX:-full}"
+# Re-estimates of the placebo baseline, to measure its own sampling spread.
+# The permutation null holds the baseline fixed, so without this a significant
+# contrast cannot be distinguished from a lucky split. Costs roughly four
+# minutes per rep at 49 layers; 0 or 1 skips the measurement entirely.
+PLACEBO_REPS="${PLACEBO_REPS:-1}"
 # 1000 injected items and 2084 withheld, so n=1000 uses the whole injected
 # arm and still satisfies |R| = 2|S| exactly. No reason to leave power unused.
 N="${N:-1000}"
@@ -130,7 +135,8 @@ for s in $SETS; do
   echo "-- $s  (prefix=$PREFIX)"
   if python3 src/run_rscp_eval.py --model "$MODEL" --reference-model "$REF_MODEL" \
        --suspect "$sus" --reference "$ref" --max-length "$MAXLEN" \
-       --batch-size "$BATCH" --out "$OUT/${tag}__contam_${s}_${PREFIX}"; then
+       --batch-size "$BATCH" --placebo-reps "$PLACEBO_REPS" \
+       --out "$OUT/${tag}__contam_${s}_${PREFIX}"; then
     ran=$((ran+1))
   else
     echo "  FAILED: $s"

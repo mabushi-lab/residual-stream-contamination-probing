@@ -61,6 +61,7 @@ from rscp import (
     correctness_vector,
     cross_fit_smoother,
     lam_for_df,
+    contrast_verdict,
     finalise_contrast,
     layer_profile,
     level_matched_placebo,
@@ -305,6 +306,14 @@ def audit(args):
                     "n_per_side": plc.get("n_per_side")},
         "contrast": {"T_adj": ct["T_adj"], "T_raw": ct["T_raw"],
                      "baseline": ct["baseline"], "p_value": ct["p_value"],
+                     # The null's own spread, so it can be compared against
+                     # the placebo's, and the p-value that results from
+                     # propagating the latter. Both are None when the baseline
+                     # variance was never measured, which is itself the signal
+                     # that a significant result here is provisional.
+                     "null_sd": ct.get("null_sd"),
+                     "p_value_baseline_inflated":
+                         ct.get("p_value_baseline_inflated"),
                      "recentred": recentred},
         "contrast_uncorrected": {"T": raw["T_raw"], "p_value": raw["p_value"]},
         "verdict": None,
@@ -324,65 +333,20 @@ def audit(args):
             "same sample size. A half-size baseline tripled the false "
             "positive rate in Phase 0c.")
 
-    if exch == "failed" and not args.acknowledge_non_exchangeable:
+    out["verdict"], blocked = contrast_verdict(
+        exchangeability=exch,
+        ba_nuisance=ba_nuis,
+        nuis_block=args.nuis_block,
+        acknowledged=bool(args.acknowledge_non_exchangeable),
+        recentred=recentred,
+        placebo_status=plc.get("status"),
+        p_value=ct["p_value"],
+        p_value_inflated=ct.get("p_value_baseline_inflated"),
+        base_sd=None if placebo_spread is None else placebo_spread["sd"],
+        sd_ratio=(placebo_spread or {}).get("sd_ratio"),
+        alpha=args.alpha)
+    if blocked:
         out["verdict_blocked"] = True
-        out["verdict"] = (
-            f"NO VERDICT. BA_nuisance = {ba_nuis:.3f} exceeds "
-            f"{args.nuis_block:.2f}: a classifier with no access to the model "
-            "separates these two sets almost perfectly, so they are not "
-            "exchangeable and Requirement E fails. This is the defining "
-            "property of a temporal split, and it is why published "
-            "membership-inference numbers on such splits are not "
-            "interpretable. The contrast is reported above as a measurement, "
-            "not as evidence of contamination. Pass "
-            "--acknowledge-non-exchangeable to override, and say so in any "
-            "writeup.")
-    elif not recentred:
-        out["verdict"] = (f"NO BASELINE ({plc.get('status')}). Without a "
-                          "level-matched placebo the contrast assumes surface "
-                          "decodability is flat in depth, which Phase 0c shows "
-                          "fails in both directions. No claim admissible. "
-                          "Supply a surface key with spread, or more reference "
-                          "items.")
-    elif ct["p_value"] < args.alpha:
-        # Second gate, alongside Requirement E. The p-value above holds the
-        # placebo baseline fixed, but it is estimated, and when its own spread
-        # rivals the null's the significance can be an artefact of which split
-        # the search happened to draw. Measured on a real audit: sd 0.0057
-        # against a null sd of 0.0043, turning p = 0.0075 into about 0.065.
-        p_i = ct.get("p_value_baseline_inflated")
-        ratio = (placebo_spread or {}).get("sd_ratio")
-        pre = ("[REQUIREMENT E OVERRIDDEN] " if exch == "failed" else
-               "[EXCHANGEABILITY MARGINAL] " if exch == "marginal" else "")
-        if placebo_spread is None:
-            out["verdict"] = (
-                pre + f"PROVISIONAL. Contrast significant (p="
-                f"{ct['p_value']:.4f}) holding the placebo baseline fixed, but "
-                "the baseline is an estimate and its variance has not been "
-                "measured. Re-run with --placebo-reps 8 before reporting "
-                "this: on a real audit that correction turned p = 0.0075 into "
-                "0.065.")
-        elif p_i is not None and p_i >= args.alpha:
-            out["verdict_blocked"] = True
-            out["verdict"] = (
-                pre + f"NO VERDICT. The contrast is significant (p="
-                f"{ct['p_value']:.4f}) only while the placebo baseline is "
-                f"treated as known. Its measured standard deviation is "
-                f"{placebo_spread['sd']:.5f}, {ratio:.2f} times the null's "
-                f"own, and propagating it gives p = {p_i:.4f}. The result is "
-                "inside the noise of the correction used to produce it.")
-        else:
-            out["verdict"] = (
-                pre + f"Contrast significant (p={ct['p_value']:.4f}, "
-                f"p={p_i:.4f} with the baseline's variance propagated) after "
-                "recentring on the model's own null depth profile. Evidence "
-                "of depth-dependent familiarity beyond surface separability. "
-                "Report an exposure interval only if a same-family "
-                "calibration exists.")
-    else:
-        out["verdict"] = (f"Contrast null (p={ct['p_value']:.4f}). No evidence "
-                          "at this sensitivity. Report the detection floor so "
-                          "the null can be read at the right strength.")
 
     # --- contamination-adjusted score, if labels were supplied ------------
     corr = [it.get("correct") for it in S]

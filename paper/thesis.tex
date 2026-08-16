@@ -109,8 +109,9 @@ likelihood-based membership inference, or with canary strings, and each needs
 something usually unavailable: the training corpus, a well-chosen test
 statistic, or foresight at dataset release. A recent alternative reads
 contamination off a linear probe on the model's internal activations. We show
-that the natural way to do this does not work, and specify one that survives
-measurement.
+that the natural way to do this does not work, specify one that survives
+measurement, and then find that the correction which makes it work carries
+more variance than the null it is tested against.
 
 The protocol reports a zero-sum contrast on the depth profile of probe
 accuracy, recentred on a level-matched placebo baseline and tested against a
@@ -128,18 +129,28 @@ all of these, under two deliberately dissimilar simulators, and reaches 0.8
 power at a separation of roughly one to two accuracy points between the
 embedding layer and the profile peak.
 
-We then run the protocol on real transformers. Baseline depth profiles are
-measurably not flat, spanning up to \PoneWkSpanHi{} accuracy points on a
-temporal split, and their non-flatness tracks the surface difference between
-the two item sets (correlation \PoneCorr{} over \PoneN{} audits), so the
-correction is largest exactly where it is needed and negligible where it is
-not. All \PonePileNulls{} well-matched Pile arms return null, as the
-literature predicts for a corpus seen approximately once, and the protocol
-refuses a verdict on the temporal split rather than reporting one. What this
-does not establish is whether transformers carry a familiarity direction at
-all: the only positive sits on the split where exchangeability fails. We
-release the implementation, the test suite, the validation study and the
-audits.
+We then run the protocol on real transformers, and it fails a test the
+simulations did not pose. Baseline depth profiles are measurably not flat,
+spanning up to \PoneWkSpanHi{} accuracy points on a temporal split, and their
+non-flatness tracks the surface difference between the two item sets
+(correlation \PoneCorr{} over \PoneN{} audits), so the correction is largest
+exactly where it is needed. But the correction is an estimate, and the
+permutation null holds it fixed. Re-estimating it across split seeds on
+\PthreeN{} audits of deliberately contaminated checkpoints gives a standard
+deviation \PthreeRatioLo{} to \PthreeRatioHi{} times the null's own, in every
+arm: the quantity subtracted to remove a bias is more variable than the
+quantity it is subtracted from. The one nominally significant result in this
+paper, $p=\PthreeBlockedP{}$, becomes $p=\PthreeBlockedPinfl{}$ once that
+variance is propagated, and the protocol issues no verdict. The simulations
+missed this because their surface key is the covariate driving item variation;
+on real text it is a proxy, and degrading key quality in simulation reproduces
+the effect. We therefore add a required companion measurement and a widened
+null, and report that no arm shows contamination: all \PonePileNulls{}
+well-matched Pile arms are null, the temporal split is refused for failing
+exchangeability, and the contaminated checkpoints are null at both duplication
+counts tested. Whether transformers carry a familiarity direction remains
+open. We release the implementation, the test suite, the validation study and
+the audits.
 \end{abstract}
 
 \section{Introduction}
@@ -381,6 +392,25 @@ The statistic actually tested is the recentred contrast of Eq.~\eqref{eq:adj}, a
 \paragraph{Cost.} Naively this requires refitting $B\times(L+1)\times K$ probes. Equation~\eqref{eq:smoother} removes that. Because $\Pi_\ell$ is independent of the labels, it is computed once per layer per fold-seed, at cost $O(K(nd^2+d^3))$ or $O(Kn^3)$ via the dual form when $d>n$, and every permutation thereafter costs a single matrix-vector product $\Pi_\ell\tilde y^{(b)}$ at $O(n^2)$, plus a sort for the median threshold. For $n=1000$ per set, $L=24$, $K=5$, $B=1000$, the permutation stage is on the order of $10^{11}$ floating-point operations, which is seconds on a laptop. Activation extraction, done once, dominates.
 
 This is the practical reason for choosing ridge over logistic regression. Logistic fitted values are not linear in the labels, so the shortcut does not apply and the permutation test becomes the expensive part of the protocol. In the linear-probe regime the two objectives generally rank layers similarly, but this is a design choice rather than an established fact and \S\ref{sec:programme} lists it as something to check.
+
+\subsection{The baseline is an estimate, and its variance has to be carried}
+\label{sec:basevar}
+
+The permutation above holds the placebo baseline fixed. It is not fixed. The baseline comes from a split of the reference set at the extremes of a surface key, at a noise level chosen by a search, and both the split and the search are random. Its sampling variability therefore belongs in the null and is absent from it.
+
+Whether that matters is an empirical question with an uncomfortable answer. Re-estimating the baseline over $J$ split seeds and taking the standard deviation of $w^{\top}\hat b_j$ gives, on the real audits of \S\ref{sec:phase3}, a quantity \PthreeRatioLo{} to \PthreeRatioHi{} times the standard deviation of the permutation null itself, in every arm measured. The correction is more variable than the thing it corrects. \S\ref{sec:phase0} did not see this because its simulated surface key is derived from the covariate that actually drives item variation; on real text the key is a proxy, and a poor proxy makes the split nearly arbitrary. Sweeping key quality in simulation reproduces the effect, raising the baseline's standard deviation about twentyfold, while sweeping depth at a good key does not.
+
+The protocol therefore requires two additions.
+
+\textbf{Report the ratio.} Measure $\hat\sigma_{b}$ over at least eight split seeds and report it beside the null's own $\hat\sigma_{0}$. A ratio near zero means the recentring is essentially free. A ratio near or above one means the reported $p$ is not the uncertainty of interest.
+
+\textbf{Propagate it.} Widen the null by the measured baseline variance,
+\begin{equation}
+\tilde T^{(b)} = T^{(b)} + \varepsilon_b,\qquad \varepsilon_b\sim\mathcal{N}(0,\hat\sigma_{b}^{2}),
+\end{equation}
+and take the $p$-value from $\tilde T$. This assumes the baseline's error is independent of the permutation null and approximately Gaussian. Both are approximations; treating an estimated quantity as known is not an approximation but an error, and \S\ref{sec:phase3} shows it is the difference between a significant finding and none.
+
+A verdict that survives only while $\hat b$ is treated as known is not admissible, and the released implementation refuses to issue one, in the same way it refuses when Requirement E fails.
 
 \subsection{Exposure calibration}
 \label{sec:calibration}
@@ -832,13 +862,15 @@ Item margins from \S\ref{sec:adjusted} produce a per-item score that is not a di
 
 \paragraph{L10. Small models may not show the phenomenon.} If the familiarity direction emerges only above some scale, results at 160M to 2.8B will be uninformative about the models people actually evaluate. The scale trend across the Pythia suite is the diagnostic, and a flat or non-monotone trend should be reported as failure to establish the effect rather than smoothed over.
 
-\paragraph{L11. The placebo can only match where the surface key reaches.} The baseline is built by splitting the reference set at the extremes of a surface key, and the search picks whichever split lands closest to the observed layer-0 separability. Both the search and its target are therefore bounded by what that key can produce. Phase 3 shows the failure in both directions: on the full-record arm the match is within \PthreeGapLo{}, but on the short-prefix arm the placebo reaches only $0.497$ against an observed $0.515$, and in an earlier run at half the sample size the observed profile fell below chance, which a key-based split cannot reproduce at all because splitting on any key produces some separability. When the observed level lies outside the key's attainable range the recentring is approximate, and the residual mismatch is a bias of unknown sign. The match gap is reported for exactly this reason and should be read before the contrast.
+\paragraph{L11. Propagating the baseline variance is an approximation.} \S\ref{sec:basevar} widens the null by a measured $\hat\sigma_b$ under independence and normality. Neither is established. The baseline and the observed contrast are computed from overlapping reference items, so independence is optimistic and the widening may be too small; against that, $\hat\sigma_b$ estimated from eight seeds is itself noisy. The honest position is that this replaces a known error with a stated approximation, and that a result sitting near the boundary after propagation should be treated as unresolved rather than as either outcome. Estimating the baseline's contribution by a nested resampling scheme, at proportionate cost, is the obvious improvement and is not done here.
 
-\paragraph{L12. Multiplicity.} The contrast is a single pre-registered test per model and item pool, but auditing many benchmarks, models and extraction points reintroduces multiplicity; fix the analysis plan in advance and apply Benjamini-Hochberg across the pre-registered family \cite{benjamini1995fdr}.
+\paragraph{L12. The placebo can only match where the surface key reaches.} The baseline is built by splitting the reference set at the extremes of a surface key, and the search picks whichever split lands closest to the observed layer-0 separability. Both the search and its target are therefore bounded by what that key can produce. Phase 3 shows the failure in both directions: on the full-record arm the match is within \PthreeGapLo{}, but on the short-prefix arm the placebo reaches only $0.497$ against an observed $0.515$, and in an earlier run at half the sample size the observed profile fell below chance, which a key-based split cannot reproduce at all because splitting on any key produces some separability. When the observed level lies outside the key's attainable range the recentring is approximate, and the residual mismatch is a bias of unknown sign. The match gap is reported for exactly this reason and should be read before the contrast.
 
-\paragraph{L13. Statistical power.} With $n$ in the low thousands and effect sizes of a few balanced-accuracy points, power is limited (\S\ref{sec:phase0}), and underpowered designs produce unreliable literatures \cite{card2020power,dror2018hitchhiker}. Power should be computed from the calibration curve before collection; a study that cannot reach $0.8$ at the target $m$ should say so rather than run.
+\paragraph{L13. Multiplicity.} The contrast is a single pre-registered test per model and item pool, but auditing many benchmarks, models and extraction points reintroduces multiplicity; fix the analysis plan in advance and apply Benjamini-Hochberg across the pre-registered family \cite{benjamini1995fdr}.
 
-\paragraph{L14. Dual use.} A reliable membership detector applied to individuals' text is a privacy attack \cite{carlini2021extracting,nasr2023scalable}. The set-level framing limits this, but item margins are individual scores and the calibration would transfer. Released artefacts should be restricted to benchmark items and public-corpus documents.
+\paragraph{L14. Statistical power.} With $n$ in the low thousands and effect sizes of a few balanced-accuracy points, power is limited (\S\ref{sec:phase0}), and underpowered designs produce unreliable literatures \cite{card2020power,dror2018hitchhiker}. Power should be computed from the calibration curve before collection; a study that cannot reach $0.8$ at the target $m$ should say so rather than run.
+
+\paragraph{L15. Dual use.} A reliable membership detector applied to individuals' text is a privacy attack \cite{carlini2021extracting,nasr2023scalable}. The set-level framing limits this, but item margins are individual scores and the calibration would transfer. Released artefacts should be restricted to benchmark items and public-corpus documents.
 
 \section{Phase 1: the Protocol on Real Models}
 \label{sec:phase1}
@@ -945,26 +977,51 @@ separate the injected half from the withheld half. This is the only arm in the
 paper where that is true, and it is worth contrasting with the
 \PoneWkNuisLo{}--\PoneWkNuisHi{} of the temporal split.
 
-At $m=\PthreeDup{}$ duplications the contrast is null under both arms, with
-$p$ between \PthreePLo{} and \PthreePHi{}. We ran it twice at the same sample
-size, differing only in how much of each record the probe reads, because a
-null on a \PthreeWordsGoal{}-word prefix would say more about the prefix than
-about the instrument. Extending to the full record, \PthreeWordsFull{} words
-and what the model was actually trained on, does not change the outcome.
+We ran \PthreeN{} arms: two duplication counts, $m=\PthreeDupLo{}$ and
+$m=\PthreeDupHi{}$, crossed with two prefix lengths, at a common sample size.
+The two exposures use the same injected items and the same withheld items, so
+only the exposure differs. The prefix arms differ only in how much of each
+record the probe reads, because a null on a \PthreeWordsGoal{}-word prefix
+would say more about the prefix than about the instrument, and the full record
+is \PthreeWordsFull{} words.
 
-Both adjusted statistics are positive and neither is significant, and the
-smaller of the two $p$ values, \PthreePLo{}, is worth quoting rather than
-rounding away. It is not evidence: two tests neither of which clears $0.05$,
-and at half this sample size the full-record arm carried the opposite sign. A
-statistic that changes sign as items are added is behaving like noise around
-zero.
+\PthreeBlocked{} of the \PthreeN{} arms reaches nominal significance, at
+$p=\PthreeBlockedP{}$, and it is the lower exposure. That ordering is already
+wrong: more duplication should give more signal, not less. Two further facts
+finish it off. Within that exposure the two prefix lengths give adjusted
+statistics of opposite sign on identical items. And the significance comes
+entirely from the recentring, since the uncorrected contrast on that arm is
+null.
 
-Two things follow. The null should be read at the sensitivity
-\S\ref{sec:phase0} establishes, which is a real but bounded one, rather than as
-an absence of any effect. And it extends the calibration point of
+\paragraph{The correction carries more variance than the null.} Recentring
+subtracts an estimate. The placebo baseline comes from a random split of the
+reference set at a searched noise level, and the permutation null of
+\S\ref{sec:method} describes the observed contrast with that estimate held
+fixed. Re-estimating it over eight split seeds per arm gives a standard
+deviation of \PthreeBaseSdLo{} to \PthreeBaseSdHi{}, against a null standard
+deviation smaller than that in \PthreeRatioAboveOne{} of \PthreeN{} arms: the
+ratio runs from \PthreeRatioLo{} to \PthreeRatioHi{}. The quantity subtracted
+to remove a bias is more variable than the quantity it is subtracted from.
+
+Propagating that variance turns $p=\PthreeBlockedP{}$ into
+$p=\PthreeBlockedPinfl{}$, and the protocol issues no verdict. The apparent
+detection was an artefact of which placebo split the search happened to draw:
+across those eight seeds the baseline ranged widely enough that a different
+draw would have moved the statistic by more than its own size.
+
+This is a defect in the protocol as first specified, not in this dataset. It
+does not touch the nulls, since an unmodelled variance component can only make
+a null more null, and it does not undo \S\ref{sec:phase0}'s finding that
+contrasting against a flat profile fails in both directions. The recentring is
+still necessary. What it is not is free, and \S\ref{sec:basevar} states the
+measurement that now has to accompany it.
+
+Two things survive from the original reading. The null should be read at the
+sensitivity \S\ref{sec:phase0} establishes, which is real but bounded, rather
+than as an absence of any effect. And it extends the calibration point of
 Table~\ref{tab:we2published}, where every published method including an
-activation probe sits within a few points of chance at $m\in\{1,2\}$, out to a
-duplication count fifty times higher.
+activation probe sits within a few points of chance at $m\in\{1,2\}$, out to
+duplication counts of \PthreeDupLo{} and \PthreeDupHi{}.
 
 \begin{figure*}[t]
 \centering

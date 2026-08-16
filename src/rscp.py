@@ -557,6 +557,92 @@ def finalise_contrast(
             "recentred": placebo_profile is not None}
 
 
+def contrast_verdict(
+    *,
+    exchangeability: str,
+    ba_nuisance: float,
+    nuis_block: float,
+    acknowledged: bool,
+    recentred: bool,
+    placebo_status: str | None,
+    p_value: float,
+    p_value_inflated: float | None = None,
+    base_sd: float | None = None,
+    sd_ratio: float | None = None,
+    alpha: float = 0.05,
+) -> tuple[str, bool]:
+    """Decide the verdict. Pure, so the gates can be tested without an audit.
+
+    Returns ``(verdict, blocked)``. Two preconditions can veto a positive
+    finding, and both exist because a measurement said they had to.
+
+    Requirement E. When a classifier with no access to the model separates the
+    two sets, any statistic computed on them confounds memorisation with
+    distribution shift. This is the defining property of a temporal split.
+
+    Baseline variance. The permutation null describes the contrast with the
+    placebo baseline held fixed, but the baseline is estimated from a random
+    split of the reference set, and its spread depends on how well the surface
+    key tracks what separates the sets. Measured on a real audit it was 0.0057
+    against a null sd of 0.0043, turning p = 0.0075 into roughly 0.065. A
+    result that survives only while an estimated quantity is treated as known
+    is not a result.
+
+    This function exists as a separate unit because both gates were, at
+    different times, believed to be wired when they were not. Logic that can
+    veto a finding should be testable without running the finding.
+    """
+    if exchangeability == "failed" and not acknowledged:
+        return (f"NO VERDICT. BA_nuisance = {ba_nuisance:.3f} exceeds "
+                f"{nuis_block:.2f}: a classifier with no access to the model "
+                "separates these two sets almost perfectly, so they are not "
+                "exchangeable and Requirement E fails. This is the defining "
+                "property of a temporal split, and it is why published "
+                "membership-inference numbers on such splits are not "
+                "interpretable. The contrast is reported above as a "
+                "measurement, not as evidence of contamination. Pass "
+                "--acknowledge-non-exchangeable to override, and say so in "
+                "any writeup.", True)
+
+    if not recentred:
+        return (f"NO BASELINE ({placebo_status}). Without a level-matched "
+                "placebo the contrast assumes surface decodability is flat in "
+                "depth, which Phase 0c shows fails in both directions. No "
+                "claim admissible. Supply a surface key with spread, or more "
+                "reference items.", False)
+
+    pre = ("[REQUIREMENT E OVERRIDDEN] " if exchangeability == "failed" else
+           "[EXCHANGEABILITY MARGINAL] " if exchangeability == "marginal"
+           else "")
+
+    if p_value >= alpha:
+        return (f"Contrast null (p={p_value:.4f}). No evidence at this "
+                "sensitivity. Report the detection floor so the null can be "
+                "read at the right strength.", False)
+
+    if base_sd is None:
+        return (pre + f"PROVISIONAL. Contrast significant (p={p_value:.4f}) "
+                "holding the placebo baseline fixed, but the baseline is an "
+                "estimate and its variance has not been measured. Re-run with "
+                "--placebo-reps 8 before reporting this: on a real audit that "
+                "correction turned p = 0.0075 into 0.065.", False)
+
+    if p_value_inflated is not None and p_value_inflated >= alpha:
+        return (pre + f"NO VERDICT. The contrast is significant "
+                f"(p={p_value:.4f}) only while the placebo baseline is treated "
+                f"as known. Its measured standard deviation is {base_sd:.5f}, "
+                f"{sd_ratio:.2f} times the null's own, and propagating it "
+                f"gives p = {p_value_inflated:.4f}. The result is inside the "
+                "noise of the correction used to produce it.", True)
+
+    return (pre + f"Contrast significant (p={p_value:.4f}, "
+            f"p={p_value_inflated:.4f} with the baseline's variance "
+            "propagated) after recentring on the model's own null depth "
+            "profile. Evidence of depth-dependent familiarity beyond surface "
+            "separability. Report an exposure interval only if a same-family "
+            "calibration exists.", False)
+
+
 def profile_contrast_test(
     c_layers: Sequence[np.ndarray],
     y: np.ndarray,

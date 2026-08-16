@@ -142,6 +142,15 @@
     0.49660000000000004,
     0.49360000000000004
   ],
+  "placebo_spread": {
+    "reps": 8,
+    "mean": -0.0023372083333333344,
+    "sd": 0.005584962147453821,
+    "min": -0.011558333333333322,
+    "max": 0.005093999999999987,
+    "null_sd": 0.0042911301352140455,
+    "sd_ratio": 1.301513114604071
+  },
   "placebo": {
     "status": "ok",
     "ba0": 0.5129999999999999,
@@ -154,6 +163,8 @@
     "T_raw": -0.0017549999999999892,
     "baseline": -0.005234999999999993,
     "p_value": 0.2098950524737631,
+    "null_sd": 0.0042911301352140455,
+    "p_value_baseline_inflated": 0.312343828085957,
     "recentred": true
   },
   "contrast_uncorrected": {
@@ -162,5 +173,5 @@
   },
   "verdict": "Contrast null (p=0.2099). No evidence at this sensitivity. Report the detection floor so the null can be read at the right strength.",
   "warnings": [],
-  "wallclock_s": 2168.5890350341797
+  "wallclock_s": 1935.0689630508423
 }

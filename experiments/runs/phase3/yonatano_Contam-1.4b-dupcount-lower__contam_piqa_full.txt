@@ -17,6 +17,6 @@ depth contrast   T_raw=+0.00507  baseline=-0.00572  T_adj=+0.01079
 uncorrected      T=+0.00507  p=0.1194  (shown only to expose the baseline's effect)
 
 VERDICT
-  Contrast significant (p=0.0075) after recentring on the model's own null depth profile. Evidence of depth-dependent familiarity beyond surface separability. Report an exposure interval only if a same-family calibration exists.
+  NO VERDICT. The contrast is significant (p=0.0075) only while the placebo baseline is treated as known. Its measured standard deviation is 0.00566, 1.31 times the null's own, and propagating it gives p = 0.0745. The result is inside the noise of the correction used to produce it.
 
-ran in 3000.0s
+ran in 1892.6s

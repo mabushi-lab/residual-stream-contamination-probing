@@ -55,7 +55,18 @@ MAC: list[str] = []
 WORD = {1: "One", 50: "Fifty"}
 
 
+_SEEN: set[str] = set()
+
+
 def mac(name, val, fmt=".3f"):
+    # LaTeX rejects a repeated \newcommand, and the failure arrives as an
+    # opaque build error a long way from the cause. Catch it here instead.
+    if name in _SEEN:
+        raise SystemExit(
+            f"macro {name!r} emitted twice. Two rows are producing the same "
+            "name, so one would silently overwrite the other in the paper. "
+            "Key it by whatever distinguishes them.")
+    _SEEN.add(name)
     MAC.append("\\newcommand{\\" + name + "}{" + format(val, fmt) + "}")
 
 
@@ -90,6 +101,10 @@ def load(d):
             T_raw=o["contrast"]["T_raw"], baseline=o["contrast"]["baseline"],
             T_adj=o["contrast"]["T_adj"], p=o["contrast"]["p_value"],
             p_raw=o["contrast_uncorrected"]["p_value"],
+            p_infl=o["contrast"].get("p_value_baseline_inflated"),
+            null_sd=o["contrast"].get("null_sd"),
+            base_sd=(o.get("placebo_spread") or {}).get("sd"),
+            sd_ratio=(o.get("placebo_spread") or {}).get("sd_ratio"),
             blocked=bool(o.get("verdict_blocked", False))))
     seen = {}
     for r in rows:
@@ -156,23 +171,29 @@ def mean_words(mode):
 def table(rows):
     L = [r"\begin{table}[t]", r"\small", r"\centering",
          r"\setlength{\tabcolsep}{4pt}",
-         r"\begin{tabular}{@{}rlrrrrl@{}}", r"\toprule",
-         r"$m$ & Prefix & words & $\BA_{\nuis}$ & baseline span & "
-         r"$T_{\mathrm{adj}}$ & Outcome \\", r"\midrule"]
+         r"\begin{tabular}{@{}rlrrrrrl@{}}", r"\toprule",
+         r"$m$ & Prefix & $\BA_{\nuis}$ & $T_{\mathrm{adj}}$ & $p$ & "
+         r"$\frac{\mathrm{sd(base)}}{\mathrm{sd(null)}}$ & $p^{*}$ & "
+         r"Outcome \\", r"\midrule"]
     for r in rows:
-        mw = mean_words(r["mode"])
+        pi = "--" if r["p_infl"] is None else f"{r['p_infl']:.3f}"
+        rt = "--" if r["sd_ratio"] is None else f"{r['sd_ratio']:.2f}"
+        out = "no verdict" if r["blocked"] else "null"
         L.append(
-            f"{r['dup']} & {MODE_LABEL[r['mode']]} & {mw:.0f} & "
-            f"{r['ba_nuis']:.3f} & {r['span']:.1f} pts & {r['T_adj']:+.4f} & "
-            f"null, $p={r['p']:.3f}$ \\\\")
+            f"{r['dup']} & {MODE_LABEL[r['mode']]} & "
+            f"{r['ba_nuis']:.3f} & {r['T_adj']:+.4f} & {r['p']:.3f} & "
+            f"{rt} & {pi} & {out} \\\\")
     L += [r"\bottomrule", r"\end{tabular}",
-          r"\caption{Phase 3, measured. Oren et al.'s deliberately "
-          r"contaminated 1.4B checkpoint, PIQA injected at $m=50$. Both arms "
-          r"are the same test file split at random before training, so "
-          r"Requirement E holds by construction and $\BA_{\nuis}$ confirms it. "
-          r"The two rows differ only in how much of each record the probe "
-          r"reads. Neither is significant, so the null is not an artefact of "
-          r"a short prefix.}",
+          r"\caption{Phase 3, measured. \citeauthor{oren2024proving}'s "
+          r"contaminated 1.4B checkpoints, PIQA injected at two duplication "
+          r"counts. Both arms are the same test file split at random before "
+          r"training, so Requirement E holds by construction and "
+          r"$\BA_{\nuis}$ confirms it. $p$ holds the placebo baseline fixed, "
+          r"as the protocol originally specified; $p^{*}$ propagates the "
+          r"baseline's own sampling variance, measured over eight split "
+          r"seeds. The ratio column is that variance against the null's. It "
+          r"exceeds one in every arm, which is why the one nominally "
+          r"significant result carries no verdict.}",
           r"\label{tab:phase3}", r"\end{table}"]
     open(s(GENERATED / "phase3_table.tex"), "w").write("\n".join(L) + "\n")
     print("  paper/generated/phase3_table.tex")
@@ -217,10 +238,34 @@ def main():
     mac("PthreeGapLo", min(abs(r["gap"]) for r in rows), ".3f")
     mac("PthreeGapHi", max(abs(r["gap"]) for r in rows), ".3f")
     mac("PthreePositive", float(sum(1 for r in rows if r["T_adj"] > 0)), ".0f")
-    for r in rows:
-        w = mean_words(r["mode"])
+    rr = [r["sd_ratio"] for r in rows if r["sd_ratio"] is not None]
+    if rr:
+        mac("PthreeRatioLo", min(rr), ".2f")
+        mac("PthreeRatioHi", max(rr), ".2f")
+        mac("PthreeRatioAboveOne", float(sum(1 for v in rr if v > 1.0)), ".0f")
+        mac("PthreeBaseSdLo", min(r["base_sd"] for r in rows
+                                  if r["base_sd"] is not None), ".5f")
+        mac("PthreeBaseSdHi", max(r["base_sd"] for r in rows
+                                  if r["base_sd"] is not None), ".5f")
+    bl = [r for r in rows if r["blocked"]]
+    mac("PthreeBlocked", float(len(bl)), ".0f")
+    if bl:
+        mac("PthreeBlockedP", bl[0]["p"], ".4f")
+        if bl[0]["p_infl"] is None:
+            raise SystemExit(
+                f"{bl[0]['model']} {bl[0]['mode']} is blocked but carries no "
+                "propagated p-value. A verdict was vetoed on the strength of "
+                "a number the run did not record, so either the audit predates "
+                "--placebo-reps or the field is not being written. Re-run that "
+                "arm rather than reporting a veto with nothing behind it.")
+        mac("PthreeBlockedPinfl", bl[0]["p_infl"], ".4f")
+    # Keyed by prefix mode, and several rows share a mode once more than one
+    # model is present. Emitting per row would define the same macro twice,
+    # which LaTeX rejects outright.
+    for m in sorted({r["mode"] for r in rows}):
+        w = mean_words(m)
         if w is not None:
-            mac("PthreeWords" + r["mode"].capitalize(), w, ".0f")
+            mac("PthreeWords" + m.capitalize(), w, ".0f")
     open(s(GENERATED / "phase3_macros.tex"), "w").write(
         "% Auto-generated by render_phase3.py from runs/phase3/*.json\n"
         + "\n".join(MAC) + "\n")
