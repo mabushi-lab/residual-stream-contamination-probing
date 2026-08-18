@@ -19,6 +19,17 @@ decodability is flat in depth. With decodability rising it rejected 0.72 of
 true nulls; on a residual stream where noise accumulates the profile *declines*
 and the test lost all power.
 
+## v1.2.1
+
+Housekeeping after both preprints announced. The paper's page-1 footnote cited
+zenodo.21855510, the v1.0.0 version DOI. That was correct when written and
+stopped being correct when the reported numbers changed, twice. It now cites
+21969647, the snapshot the current results actually came from. The README
+badge keeps the concept DOI, which is what a badge should track, and now says
+so explicitly. `CITATION.cff` identifiers and page count updated to match.
+
+The companion paper is at arXiv:2608.14896.
+
 ## v1.1.0
 
 Streaming smoothers, and Phase 3 re-run at full sample size.

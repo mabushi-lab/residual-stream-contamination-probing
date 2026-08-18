@@ -8,9 +8,13 @@ Detecting benchmark contamination by probing a language model's internal
 activations, with the controls that make the result mean something.
 
 **Paper:** [arXiv:2608.12652](https://arxiv.org/abs/2608.12652), also built
-from source as `paper/thesis.pdf` (22 pp) · **Extended abstract:**
+from source as `paper/thesis.pdf` (23 pp) · **Extended abstract:**
 `paper/abstract_of_thesis.pdf` (2 pp) · **Where things live:**
 `PROJECT_STRUCTURE.md` · **How to run:** `docs/RUNNING.md`
+
+The concept DOI badge above always resolves to the newest release. The paper's
+own footnote cites the version DOI of the snapshot its numbers came from,
+which is [10.5281/zenodo.21969647](https://doi.org/10.5281/zenodo.21969647).
 
 ---
 

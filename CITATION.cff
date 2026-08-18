@@ -19,8 +19,8 @@ authors:
     email: braunf25@proton.me
     orcid: "https://orcid.org/0009-0003-5285-9327"
 
-version: 1.2.0
-date-released: 2026-08-15
+version: 1.2.1
+date-released: 2026-08-18
 
 repository-code: "https://github.com/mabushi-lab/residual-stream-contamination-probing"
 
@@ -33,8 +33,8 @@ identifiers:
     value: "10.5281/zenodo.21855509"
     description: "Concept DOI, all versions"
   - type: doi
-    value: "10.5281/zenodo.21855510"
-    description: "Version DOI, v1.0.0"
+    value: "10.5281/zenodo.21969647"
+    description: "Version DOI, v1.2.0"
   - type: other
     value: "arXiv:2608.12652"
     description: "Preprint describing the protocol"
